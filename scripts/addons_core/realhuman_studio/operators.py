@@ -665,6 +665,31 @@ class RH_OT_apply_pose_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+
+
+class RH_OT_toggle_pose_mode(bpy.types.Operator):
+    bl_idname = "rh_studio.toggle_pose_mode"
+    bl_label = "切换姿势编辑模式"
+    bl_description = "Switch the active armature between Object Mode and Pose Mode"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE")
+
+    def execute(self, context):
+        rig = context.active_object
+        target_mode = "OBJECT" if rig.mode == "POSE" else "POSE"
+        try:
+            bpy.ops.object.mode_set(mode=target_mode)
+        except Exception as exc:
+            self.report({"ERROR"}, "无法切换骨架编辑模式：" + str(exc))
+            return {"CANCELLED"}
+        self.report({"INFO"}, "已切换到%s。" % ("对象模式" if target_mode == "OBJECT" else "姿势模式"))
+        return {"FINISHED"}
+
+
 class RH_OT_insert_pose_keyframe(bpy.types.Operator):
     bl_idname = "rh_studio.insert_pose_keyframe"
     bl_label = "记录当前姿势关键帧"
@@ -752,7 +777,7 @@ CLASSES = (
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
-    RH_OT_apply_pose_preset, RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
+    RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,\n    RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
 )
 
 def register():
