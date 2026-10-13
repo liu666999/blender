@@ -395,7 +395,7 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
             texture.bands_direction = "X"
             texture.inputs["Scale"].default_value = 2.0
             texture.inputs["Distortion"].default_value = 0.0
-            value_socket = texture.outputs["Color"]
+            value_socket = texture.outputs["Fac"]
         else:
             texture = nodes.new("ShaderNodeTexChecker")
             texture.inputs["Scale"].default_value = 2.0
