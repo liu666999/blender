@@ -94,6 +94,18 @@ class RH_PT_main(bpy.types.Panel):
             op = row.operator("rh_studio.apply_pose_preset", text=label)
             op.preset = preset
         pose_controls.operator("rh_studio.insert_pose_keyframe", icon="KEY_HLT", text="记录当前帧关键姿势")
+        row = pose_controls.row(align=True)
+        row.operator("rh_studio.save_pose_preset", icon="PRESET", text="保存动作预设")
+        row.operator("rh_studio.load_pose_preset", icon="IMPORT", text="载入动作预设")
+        pose_controls.operator("rh_studio.check_pose_clearance", icon="MOD_PHYSICS", text="检查肢体间距风险")
+        facing_row = pose_controls.row(align=True)
+        for facing, label in (("FRONT", "正面"), ("THREE_QUARTER_L", "左45°"), ("THREE_QUARTER_R", "右45°")):
+            op = facing_row.operator("rh_studio.turn_body_preset", text=label)
+            op.facing = facing
+        facing_row = pose_controls.row(align=True)
+        for facing, label in (("SIDE_L", "左侧"), ("SIDE_R", "右侧"), ("BACK", "背面")):
+            op = facing_row.operator("rh_studio.turn_body_preset", text=label)
+            op.facing = facing
         pose_controls.label(text="在时间轴切换帧、调整骨骼，再次记录即可组成动作。")
 
         face_box = layout.box()
@@ -111,6 +123,20 @@ class RH_PT_main(bpy.types.Panel):
                 op.preset = preset
         else:
             face_box.label(text="选择带有面部表情 Shape Keys 的网格后使用。")
+        body_reaction = layout.box()
+        body_reaction.label(text="情绪与身体形态反应", icon="OUTLINER_OB_ARMATURE")
+        body_reaction.label(text="例如愤怒青筋、肌肉紧绷；需模型已有对应形态键。")
+        active = context.active_object
+        if active and active.type == "MESH" and active.data.shape_keys and len(active.data.shape_keys.key_blocks) > 1:
+            row = body_reaction.row(align=True)
+            op = row.operator("rh_studio.body_reaction_preset", text="愤怒：青筋凸起")
+            op.reaction = "ANGER_VEINS"
+            op = row.operator("rh_studio.body_reaction_preset", text="肌肉紧绷")
+            op.reaction = "MUSCLE_TENSE"
+            op = body_reaction.operator("rh_studio.body_reaction_preset", text="身体反应复位")
+            op.reaction = "RESET"
+        else:
+            body_reaction.label(text="选择带有身体反应 Shape Keys 的网格后使用。")
 
         view = layout.box()
         view.label(text="标准视图", icon="ORIENTATION_VIEW")
