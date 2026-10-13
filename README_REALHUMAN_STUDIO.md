@@ -43,7 +43,7 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 
 ## Runtime compatibility
 
-- The add-on declares Blender 4.5.0 as its minimum version. CI tests runtime behavior on Blender 4.5.14 LTS and 5.2.2 LTS rather than pinning development to one exact release.
+- The add-on declares Blender 4.5.0 as its minimum version. CI uses Blender 5.2.2 as a practical runtime smoke-test environment; this is a test harness, not a demand that users install a particular LTS release.
 - The headless runtime smoke test covers add-on registration/unregistration, rig generation, pose presets, keyframing, pose save/load, facing and clearance operators, fabric material construction, and project manifest creation. CI requires an explicit PASS marker, so a Python traceback inside Blender cannot silently pass the job.
 - The repository's current Blender source version header tracks 5.4.0 Alpha; the separate LTS test matrix checks compatibility against stable runtimes. The headless smoke test cannot exercise interactive GPU overlay drawing or real mouse input, which still need a GUI-session check.
 
