@@ -995,6 +995,213 @@ class RH_OT_body_reaction_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+
+# ---------------------------------------------------------------------------
+# Minimal 2D pose pad: circle head + a large-字 body, with four drag handles.
+# This deliberately avoids a full joint diagram. Dragging an endpoint rotates
+# the corresponding arm or thigh in the current 3D view plane.
+# ---------------------------------------------------------------------------
+class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
+    bl_idname = "rh_studio.simple_2d_pose_pad"
+    bl_label = "简笔摆姿"
+    bl_description = "Open a tiny circle-head / 大-shaped pose sketch; drag hands or feet"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE"
+                    and all(obj.pose.bones.get(name) for name in (
+                        "upper_arm.L", "upper_arm.R", "thigh.L", "thigh.R")))
+
+    def _draw(self):
+        import blf
+        import gpu
+        from gpu_extras.batch import batch_for_shader
+
+        # A SpaceView3D handler is registered globally; draw only in the view
+        # where the user opened this little sketch.
+        ctx = bpy.context
+        if ctx.area != self._area or ctx.region != self._region:
+            return
+
+        shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+
+        def line(points, color, width=2.5, closed=False):
+            if len(points) < 2:
+                return
+            coords = list(points)
+            if closed:
+                coords.append(coords[0])
+            batch = batch_for_shader(shader, "LINE_STRIP", {"pos": coords})
+            gpu.state.line_width_set(width)
+            shader.bind()
+            shader.uniform_float("color", color)
+            batch.draw(shader)
+
+        def circle(cx, cy, radius, color, width=2.0):
+            points = [
+                (cx + math.cos(i * 2.0 * math.pi / 48.0) * radius,
+                 cy + math.sin(i * 2.0 * math.pi / 48.0) * radius)
+                for i in range(48)
+            ]
+            line(points, color, width, closed=True)
+
+        try:
+            gpu.state.blend_set("ALPHA")
+            pale = (0.82, 0.88, 0.98, 0.96)
+            accent = (0.22, 0.72, 1.0, 1.0)
+            handle = (1.0, 0.62, 0.18, 1.0)
+            p = self._points
+
+            # A circle head and four limbs arranged like the character 大.
+            circle(*p["head"], 15.0, accent, 2.2)
+            line([p["neck"], p["hips"]], pale, 3.0)
+            line([p["neck"], p["shoulder.L"]], pale, 2.5)
+            line([p["neck"], p["shoulder.R"]], pale, 2.5)
+            line([p["shoulder.L"], p["hand.L"]], pale, 3.0)
+            line([p["shoulder.R"], p["hand.R"]], pale, 3.0)
+            line([p["hips"], p["hip.L"]], pale, 2.0)
+            line([p["hips"], p["hip.R"]], pale, 2.0)
+            line([p["hip.L"], p["foot.L"]], pale, 3.0)
+            line([p["hip.R"], p["foot.R"]], pale, 3.0)
+
+            for name in ("hand.L", "hand.R", "foot.L", "foot.R"):
+                circle(*p[name], 5.5, handle, 2.0)
+
+            blf.position(0, self._cx - 37, self._cy + 115, 0)
+            blf.size(0, 13)
+            blf.draw(0, "简笔摆姿")
+            blf.position(0, self._cx - 78, self._cy - 108, 0)
+            blf.size(0, 11)
+            blf.draw(0, "拖动手 / 脚端点")
+            blf.position(0, self._cx - 67, self._cy - 124, 0)
+            blf.draw(0, "Esc 退出")
+        finally:
+            gpu.state.blend_set("NONE")
+
+    def _remove_handler(self):
+        handle = getattr(self, "_draw_handle", None)
+        if handle is not None:
+            bpy.types.SpaceView3D.draw_handler_remove(handle, "WINDOW")
+            self._draw_handle = None
+        if getattr(self, "_region", None):
+            self._region.tag_redraw()
+
+    def _apply_pose(self, context):
+        rig = context.active_object
+        if not rig or rig.type != "ARMATURE":
+            return
+
+        axis = Vector((0.0, 1.0, 0.0))
+        if context.region_data:
+            axis = context.region_data.view_rotation @ Vector((0.0, 0.0, 1.0))
+        if axis.length > 1e-8:
+            axis.normalize()
+
+        # Reset to the pose from when the pad opened, then apply all current
+        # endpoint offsets so repeated mouse moves never accumulate error.
+        for name, quat in self._base_rotations.items():
+            bone = rig.pose.bones.get(name)
+            if bone:
+                bone.rotation_mode = "QUATERNION"
+                bone.rotation_quaternion = quat
+        for endpoint, bone_name in (
+            ("hand.L", "upper_arm.L"), ("hand.R", "upper_arm.R"),
+            ("foot.L", "thigh.L"), ("foot.R", "thigh.R"),
+        ):
+            delta = self._angles.get(endpoint, 0.0)
+            if abs(delta) > 1e-7:
+                _rotate_pose_bone_about_world_axis(
+                    rig, bone_name, axis, -math.degrees(delta)
+                )
+        context.view_layer.update()
+
+    def invoke(self, context, event):
+        self._area = context.area
+        self._region = context.region
+        self._cx = max(105.0, min(float(context.region.width) - 105.0,
+                                  float(context.region.width) * 0.72))
+        self._cy = float(context.region.height) * 0.50
+        cx, cy = self._cx, self._cy
+        self._points = {
+            "head": (cx, cy + 84.0),
+            "neck": (cx, cy + 65.0),
+            "shoulder.L": (cx - 20.0, cy + 43.0),
+            "shoulder.R": (cx + 20.0, cy + 43.0),
+            "hips": (cx, cy - 5.0),
+            "hip.L": (cx - 12.0, cy - 5.0),
+            "hip.R": (cx + 12.0, cy - 5.0),
+            "hand.L": (cx - 72.0, cy + 65.0),
+            "hand.R": (cx + 72.0, cy + 65.0),
+            "foot.L": (cx - 49.0, cy - 78.0),
+            "foot.R": (cx + 49.0, cy - 78.0),
+        }
+        self._base_points = {
+            name: self._points[name]
+            for name in ("hand.L", "hand.R", "foot.L", "foot.R")
+        }
+        self._angles = {name: 0.0 for name in self._base_points}
+        self._drag_handle = None
+        rig = context.active_object
+        self._base_rotations = {}
+        for name in ("upper_arm.L", "upper_arm.R", "thigh.L", "thigh.R"):
+            bone = rig.pose.bones.get(name)
+            if bone is None:
+                self.report({"WARNING"}, "此骨架缺少必要的手臂或大腿骨骼。")
+                return {"CANCELLED"}
+            self._base_rotations[name] = bone.rotation_quaternion.copy()
+        self._draw_handle = bpy.types.SpaceView3D.draw_handler_add(
+            self._draw, (), "WINDOW", "POST_PIXEL"
+        )
+        context.window_manager.modal_handler_add(self)
+        context.area.tag_redraw()
+        self.report({"INFO"}, "拖动四肢末端调整大方向；按 Esc 退出。")
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        if event.type in {"ESC", "RIGHTMOUSE"}:
+            self._remove_handler()
+            return {"FINISHED"}
+
+        if event.type == "LEFTMOUSE" and event.value == "PRESS":
+            mx, my = event.mouse_region_x, event.mouse_region_y
+            for name in ("hand.L", "hand.R", "foot.L", "foot.R"):
+                x, y = self._points[name]
+                if (mx - x) ** 2 + (my - y) ** 2 <= 15.0 ** 2:
+                    self._drag_handle = name
+                    return {"RUNNING_MODAL"}
+            return {"RUNNING_MODAL"}
+
+        if event.type == "MOUSEMOVE" and self._drag_handle:
+            name = self._drag_handle
+            root_name = {
+                "hand.L": "shoulder.L", "hand.R": "shoulder.R",
+                "foot.L": "hip.L", "foot.R": "hip.R",
+            }[name]
+            root_x, root_y = self._points[root_name]
+            mx, my = float(event.mouse_region_x), float(event.mouse_region_y)
+            dx, dy = mx - root_x, my - root_y
+            if math.hypot(dx, dy) > 1.0:
+                target_angle = math.atan2(dy, dx)
+                base_x, base_y = self._base_points[name]
+                base_angle = math.atan2(base_y - root_y, base_x - root_x)
+                self._angles[name] = target_angle - base_angle
+                length = math.hypot(base_x - root_x, base_y - root_y)
+                self._points[name] = (
+                    root_x + math.cos(target_angle) * length,
+                    root_y + math.sin(target_angle) * length,
+                )
+                self._apply_pose(context)
+                self._region.tag_redraw()
+            return {"RUNNING_MODAL"}
+
+        if event.type == "LEFTMOUSE" and event.value == "RELEASE":
+            self._drag_handle = None
+            return {"RUNNING_MODAL"}
+
+        return {"RUNNING_MODAL"}
+
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
@@ -1004,6 +1211,7 @@ CLASSES = (
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
     RH_OT_save_pose_preset, RH_OT_load_pose_preset,
     RH_OT_check_pose_clearance, RH_OT_turn_body_preset, RH_OT_body_reaction_preset,
+    RH_OT_simple_2d_pose_pad,
 )
 
 def register():
