@@ -727,12 +727,17 @@ class RH_OT_insert_pose_keyframe(bpy.types.Operator):
         frame = context.scene.frame_current
         inserted = 0
         for pose_bone in rig.pose.bones:
-            rotation_path = "rotation_quaternion" if pose_bone.rotation_mode == "QUATERNION" else "rotation_euler"
+            if pose_bone.rotation_mode == "QUATERNION":
+                rotation_path = "rotation_quaternion"
+            elif pose_bone.rotation_mode == "AXIS_ANGLE":
+                rotation_path = "rotation_axis_angle"
+            else:
+                rotation_path = "rotation_euler"
             pose_bone.keyframe_insert(data_path=rotation_path, frame=frame, group=pose_bone.name)
             pose_bone.keyframe_insert(data_path="location", frame=frame, group=pose_bone.name)
             inserted += 1
         if rig.animation_data and rig.animation_data.action:
-            rig.animation_data.action.name = rig.animation_data.action.name or "RH Pose Action"
+            rig.animation_data.action.name = "RealHuman Motion"
         self.report({"INFO"}, "已在第 %d 帧为 %d 根骨骼记录关键帧。" % (frame, inserted))
         return {"FINISHED"}
 
