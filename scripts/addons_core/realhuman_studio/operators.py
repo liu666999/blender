@@ -596,15 +596,36 @@ class RH_OT_generate_simple_rig(bpy.types.Operator):
 
 
 def _rotate_pose_bone_about_world_axis(armature, bone_name, axis, degrees):
+    """Rotate a pose bone around a world-space axis while respecting posed parents."""
     pose_bone = armature.pose.bones.get(bone_name)
     data_bone = armature.data.bones.get(bone_name)
     if pose_bone is None or data_bone is None:
         return False
+
+    # Convert the bone's rest frame into the currently posed parent frame.
+    # Using matrix_local alone ignores a rotated parent, which made side-facing
+    # poses behave differently from front-facing poses.
+    frame_matrix = data_bone.matrix_local.copy()
+    parent = pose_bone.parent
+    if parent is not None:
+        try:
+            frame_matrix = (
+                parent.matrix
+                @ parent.bone.matrix_local.inverted()
+                @ data_bone.matrix_local
+            )
+        except (ValueError, RuntimeError):
+            frame_matrix = data_bone.matrix_local.copy()
+
     pose_bone.rotation_mode = "QUATERNION"
     bone_world_orientation = (
-        armature.matrix_world.to_quaternion() @ data_bone.matrix_local.to_quaternion()
+        armature.matrix_world.to_quaternion() @ frame_matrix.to_quaternion()
     )
-    world_delta = Quaternion(Vector(axis), math.radians(degrees))
+    world_axis = Vector(axis)
+    if world_axis.length_squared < 1e-12:
+        return False
+    world_axis.normalize()
+    world_delta = Quaternion(world_axis, math.radians(degrees))
     local_delta = bone_world_orientation.inverted() @ world_delta @ bone_world_orientation
     pose_bone.rotation_quaternion = local_delta @ pose_bone.rotation_quaternion
     return True
@@ -1149,7 +1170,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
             delta = self._angles.get(endpoint, 0.0)
             if abs(delta) > 1e-7:
                 _rotate_pose_bone_about_world_axis(
-                    rig, bone_name, axis, -math.degrees(delta)
+                    rig, bone_name, axis, math.degrees(delta)
                 )
 
         # Keep each bone's original rotation mode so the normal keyframing
