@@ -44,3 +44,9 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 ## License
 
 New RealHuman Studio source files in this folder are licensed under GPL-3.0-or-later, as suitable for modifications distributed alongside Blender. Licenses for any later third-party assets must be reviewed separately and retained.
+
+
+### 极简 2D 简笔摆姿
+- 打开「简笔摆姿」后只显示圆形头部和「大」字形躯干/四肢，不显示肘、膝等中间关节点。
+- 拖动手部或脚部末端即可粗调对应手臂/大腿的方向；按 `Esc` 或右键退出。
+- 这是当前视图平面内的粗姿势控制，不是从任意 2D 草图完整反解 3D 姿态，也不包含自动肢体长度拟合或网格碰撞解算。
