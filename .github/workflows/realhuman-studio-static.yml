@@ -17,6 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/addons_core/realhuman_studio
+            tests
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -50,5 +54,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/realhuman-studio-smoke.log"
+          set +e
           "$RUNNER_TEMP/blender-${{ matrix.version }}-linux-x64/blender" \
-            --background --factory-startup --python tests/realhuman_studio_smoke.py
+            --background --factory-startup --python tests/realhuman_studio_smoke.py 2>&1 | tee "$LOG_FILE"
+          BLENDER_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$BLENDER_STATUS" -ne 0 ] || ! grep -q "^REALHUMAN_STUDIO_SMOKE_TEST: PASS$" "$LOG_FILE"; then
+            echo "Blender runtime smoke test did not reach its PASS marker."
+            exit 1
+          fi
