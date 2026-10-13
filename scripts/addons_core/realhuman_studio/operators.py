@@ -329,10 +329,111 @@ class RH_OT_export_model(bpy.types.Operator, ExportHelper):
         self.report({"INFO"}, "已导出：" + filepath)
         return {"FINISHED"}
 
+
+class RH_OT_create_fabric_print(bpy.types.Operator):
+    bl_idname = "rh_studio.create_fabric_print"
+    bl_label = "生成布料印花材质"
+    bl_description = "Create a UV-mapped procedural fabric print and assign it to selected garment meshes"
+    bl_options = {"REGISTER", "UNDO"}
+
+    pattern: EnumProperty(name="图案", items=(
+        ("DOTS", "圆点", "Voronoi-based dotted print"),
+        ("STRIPES", "条纹", "Wave-based stripe print"),
+        ("CHECKER", "格纹", "Checkerboard print")), default="DOTS")
+    density: FloatProperty(name="图案密度", description="Higher values create more repeats per UV tile", default=12.0, min=1.0, max=100.0)
+    sparsity: FloatProperty(name="稀疏度", description="Higher values leave more base fabric visible", default=0.35, min=0.0, max=0.95, subtype="FACTOR")
+    rotation: FloatProperty(name="旋转（度）", default=0.0, min=-180.0, max=180.0, subtype="ANGLE")
+    base_color: bpy.props.FloatVectorProperty(name="底布颜色", subtype="COLOR", size=4, min=0.0, max=1.0, default=(0.12, 0.16, 0.22, 1.0))
+    print_color: bpy.props.FloatVectorProperty(name="印花颜色", subtype="COLOR", size=4, min=0.0, max=1.0, default=(0.9, 0.72, 0.38, 1.0))
+
+    @classmethod
+    def poll(cls, context):
+        return any(obj.type == "MESH" for obj in context.selected_objects)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=420)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "pattern")
+        layout.prop(self, "density")
+        layout.prop(self, "sparsity", slider=True)
+        layout.prop(self, "rotation")
+        layout.prop(self, "base_color")
+        layout.prop(self, "print_color")
+
+    def execute(self, context):
+        meshes = [obj for obj in context.selected_objects if obj.type == "MESH"]
+        if not meshes:
+            self.report({"ERROR"}, "请先选择服装网格。")
+            return {"CANCELLED"}
+        material = bpy.data.materials.new(name="RH Fabric Print")
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+        nodes.clear()
+        output = nodes.new("ShaderNodeOutputMaterial")
+        output.location = (700, 80)
+        shader = nodes.new("ShaderNodeBsdfPrincipled")
+        shader.location = (440, 80)
+        links.new(shader.outputs["BSDF"], output.inputs["Surface"])
+        texcoord = nodes.new("ShaderNodeTexCoord")
+        texcoord.location = (-800, 80)
+        mapping = nodes.new("ShaderNodeMapping")
+        mapping.location = (-600, 80)
+        mapping.inputs["Rotation"].default_value[2] = self.rotation
+        mapping.inputs["Scale"].default_value = (self.density, self.density, self.density)
+        links.new(texcoord.outputs["UV"], mapping.inputs["Vector"])
+
+        if self.pattern == "DOTS":
+            texture = nodes.new("ShaderNodeTexVoronoi")
+            texture.inputs["Scale"].default_value = 1.0
+            value_socket = texture.outputs["Distance"]
+        elif self.pattern == "STRIPES":
+            texture = nodes.new("ShaderNodeTexWave")
+            texture.wave_type = "BANDS"
+            texture.bands_direction = "X"
+            texture.inputs["Scale"].default_value = 2.0
+            texture.inputs["Distortion"].default_value = 0.0
+            value_socket = texture.outputs["Color"]
+        else:
+            texture = nodes.new("ShaderNodeTexChecker")
+            texture.inputs["Scale"].default_value = 2.0
+            value_socket = texture.outputs["Fac"]
+        texture.location = (-350, 80)
+        links.new(mapping.outputs["Vector"], texture.inputs["Vector"])
+
+        threshold = nodes.new("ShaderNodeMath")
+        threshold.operation = "LESS_THAN"
+        threshold.location = (-100, 80)
+        threshold.inputs[1].default_value = max(0.02, 1.0 - self.sparsity)
+        links.new(value_socket, threshold.inputs[0])
+        mix = nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.location = (150, 80)
+        mix.inputs["Factor"].default_value = 0.5
+        # RGBA Mix sockets are typed and exposed by Blender 4.x/5.x.
+        links.new(threshold.outputs[0], mix.inputs[0])
+        mix.inputs[6].default_value = self.base_color
+        mix.inputs[7].default_value = self.print_color
+        links.new(mix.outputs[2], shader.inputs["Base Color"])
+        for obj in meshes:
+            if not obj.data.materials:
+                obj.data.materials.append(material)
+            else:
+                obj.data.materials[obj.active_material_index] = material
+        material["rh_studio_material_type"] = "procedural_fabric_print"
+        material["rh_studio_pattern"] = self.pattern
+        material["rh_studio_density"] = self.density
+        material["rh_studio_sparsity"] = self.sparsity
+        material["rh_studio_rotation_degrees"] = self.rotation * 57.295779513
+        self.report({"INFO"}, "已为 %d 个网格生成布料印花材质。请确保服装有可用 UV。" % len(meshes))
+        return {"FINISHED"}
+
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,\n    RH_OT_create_fabric_print,
 )
 
 def register():
