@@ -1104,6 +1104,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
             for name in self._CONTROL_BONES:
                 circle(*p[name], 6.0, handle, 2.0)
 
+            blf.color(0, 0.92, 0.95, 1.0, 1.0)
             blf.position(0, self._cx - 37, self._cy + 115, 0)
             blf.size(0, 13)
             blf.draw(0, "简笔摆姿")
@@ -1272,6 +1273,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
         self._reset_sketch_points_only()
         self._drag_handle = None
         self._rig = context.active_object
+        context.view_layer.update()
         self._base_states = {}
         for name in set(self._CONTROL_BONES.values()):
             bone = self._rig.pose.bones.get(name)
@@ -1351,7 +1353,8 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
                 target_angle = math.atan2(dy, dx)
                 base_x, base_y = self._base_points[name]
                 base_angle = math.atan2(base_y - root_y, base_x - root_x)
-                self._angles[name] = target_angle - base_angle
+                raw_delta = target_angle - base_angle
+                self._angles[name] = math.atan2(math.sin(raw_delta), math.cos(raw_delta))
                 length = math.hypot(base_x - root_x, base_y - root_y)
                 self._points[name] = (
                     root_x + math.cos(target_angle) * length,
