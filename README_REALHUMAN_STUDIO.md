@@ -15,6 +15,7 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 - Expose existing shape-key sliders and reset non-Basis shape keys.
 - Export selected objects to GLB, FBX, or OBJ, subject to exporter availability.
 - Switch between front, back, left, right, top, and bottom views.
+- Generate and assign a UV-based procedural fabric-print material with dot, stripe, or checker motifs; adjustable density, sparsity, rotation, base color, and print color.
 
 ## Use
 
@@ -27,11 +28,12 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 
 ## Not yet implemented
 
-- No human mesh, skeleton, anatomy mesh collection, skin textures, or cloth patterns are bundled in this phase.
+- No human mesh, skeleton, anatomy mesh collection, or skin textures are bundled in this phase. The fabric-print operator generates a procedural material; it is not a bundled library of textile assets.
 - Shape controls reveal morphs already present in a model; the tool does not yet generate a parameterized human body from scratch.
 - Height calibration is a scale operation, not anatomical retopology or proportion-aware reshaping.
 - The app still runs on the Blender host UI; a finished standalone RealHuman Studio startup template and Windows packaging are future work.
 - The asset repositories need a separate license-aware download, coordinate alignment, naming, and integration pass. Do not treat Git LFS pointer text as model data.
+- The procedural fabric-print material has been added to source but still needs an in-Blender runtime test, especially across supported Blender versions and on meshes with different UV layouts.
 - The Blender C/C++ core is untouched in this phase.
 
 ## License
