@@ -79,10 +79,12 @@ class RH_PT_main(bpy.types.Panel):
         rig_box.label(text="动作 / 火柴人骨架", icon="ARMATURE_DATA")
         rig_box.label(text="从当前人体网格估算骨骼；生成后可在视图中选骨骼旋转。")
         rig_box.operator("rh_studio.generate_simple_rig", icon="ARMATURE_DATA", text="生成火柴人骨架")
+        rig_box.label(text="动作输入只用圆头 + 大字身体，拖动手脚端点即可粗调姿势。")
         is_rig = bool(context.active_object and context.active_object.type == "ARMATURE")
         pose_controls = rig_box.column()
         pose_controls.enabled = is_rig
         if is_rig:
+            pose_controls.operator("rh_studio.simple_2d_pose_pad", text="打开简笔摆姿")
             mode_label = "退出姿势编辑" if context.active_object.mode == "POSE" else "进入姿势编辑（旋转骨骼）"
             pose_controls.operator("rh_studio.toggle_pose_mode", text=mode_label)
         row = pose_controls.row(align=True)
