@@ -29,7 +29,7 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 3. In the 3D View, press N and open the RealHuman tab.
 4. Create the category scaffold, import a real human mesh, and assign anatomy meshes to the corresponding categories.
 
-This repository commit is source code, not a prebuilt Windows installer or EXE. A Windows build has not been produced or tested by this commit. CI performs Python syntax checks only; it does not compile Blender or exercise its UI.
+This repository commit is source code, not a prebuilt Windows installer or EXE. A Windows build has not been produced or tested by this commit. CI compiles the add-on's Python files and runs headless runtime smoke tests against multiple Blender LTS versions; it does not compile Blender or validate interactive GUI behavior.
 
 ## Not yet implemented
 
@@ -38,14 +38,14 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 - Height calibration is a scale operation, not anatomical retopology or proportion-aware reshaping.
 - The app still runs on the Blender host UI; a finished standalone RealHuman Studio startup template and Windows packaging are future work.
 - The asset repositories need a separate license-aware download, coordinate alignment, naming, and integration pass. Do not treat Git LFS pointer text as model data.
-- The procedural fabric-print material and rig/pose helpers have been added to source but still need in-Blender runtime tests, including weight deformation, bone orientation, pose quality, clearance warning quality, shape-key name matching, node-socket compatibility, and different UV layouts.
+- The headless tests cover the basic operator paths, but automatic-weight quality and mesh deformation, bone orientation and final pose quality, clearance-warning accuracy, expression/shape-key matching, node-socket differences, UV behavior, and the interactive pose-pad overlay still need visual or GUI validation.
 - The Blender C/C++ core is untouched in this phase.
 
 ## Runtime compatibility
 
-- The add-on no longer requires Blender 5.x; its declared minimum is Blender 4.5.0, with CI exercising Blender 4.5.14 LTS headlessly.
-- The runtime smoke test covers add-on registration/unregistration, rig generation, pose presets, keyframing, pose save/load, facing and clearance operators, fabric material construction, and project manifest creation.
-- The headless smoke test cannot exercise interactive GPU overlay drawing or real mouse input; those still need a GUI-session check.
+- The add-on declares Blender 4.5.0 as its minimum version. CI tests runtime behavior on Blender 4.5.14 LTS and 5.2.2 LTS rather than pinning development to one exact release.
+- The headless runtime smoke test covers add-on registration/unregistration, rig generation, pose presets, keyframing, pose save/load, facing and clearance operators, fabric material construction, and project manifest creation.
+- The repository's current Blender source version header tracks 5.4.0 Alpha; the separate LTS test matrix checks compatibility against stable runtimes. The headless smoke test cannot exercise interactive GPU overlay drawing or real mouse input, which still need a GUI-session check.
 
 ## License
 
@@ -56,4 +56,4 @@ New RealHuman Studio source files in this folder are licensed under GPL-3.0-or-l
 - 绘制目标区域固定到启动按钮所在 3D 视图的 `WINDOW` 区域，鼠标用窗口坐标换算，避免按钮位于侧栏时绘制/命中坐标错位。
 - 拖动手部或脚部端点粗调对应手臂/大腿方向；`K` 记录当前帧所有骨骼关键帧，`R` 将简笔和受控骨骼复位到启动时姿势，`Esc` 或右键结束编辑。中键和滚轮继续交还视图导航。
 - 世界轴旋转会考虑父骨骼当前姿态；记录关键帧时分别处理四元数、欧拉角和轴角旋转模式。
-- 这是二维视图平面中的粗姿势控制，不是完整的二维到三维反解，不含自动肢体长度拟合或真实网格碰撞解算。仍需在 Blender 5.2 中对不同视图朝向、模型绑定权重和关键帧回放进行实际运行测试。
+- 这是二维视图平面中的粗姿势控制，不是完整的二维到三维反解，不含自动肢体长度拟合或真实网格碰撞解算。仍需在实际 GUI 会话中检查不同视图朝向、模型绑定权重和关键帧回放；开发不再限定必须使用某一个 Blender 小版本。
