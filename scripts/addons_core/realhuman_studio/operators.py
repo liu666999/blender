@@ -1041,8 +1041,11 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        required = ("upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R",
-                    "thigh.L", "thigh.R")
+        required = (
+            "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R",
+            "hand.L", "hand.R", "thigh.L", "thigh.R",
+            "shin.L", "shin.R", "foot.L", "foot.R",
+        )
         return bool(obj and obj.type == "ARMATURE"
                     and all(obj.pose.bones.get(name) for name in required))
 
