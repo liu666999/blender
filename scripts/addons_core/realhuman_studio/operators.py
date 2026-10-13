@@ -772,13 +772,236 @@ class RH_OT_expression_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+
+
+# Pose presets are stored inside the .blend scene so they travel with the project.
+def _pose_snapshot(rig):
+    snapshot = {}
+    for bone in rig.pose.bones:
+        snapshot[bone.name] = {
+            "rotation_mode": bone.rotation_mode,
+            "rotation_quaternion": list(bone.rotation_quaternion),
+            "rotation_euler": list(bone.rotation_euler),
+            "location": list(bone.location),
+            "scale": list(bone.scale),
+        }
+    return snapshot
+
+
+class RH_OT_save_pose_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.save_pose_preset"
+    bl_label = "保存当前动作预设"
+    bl_description = "Save the current rig pose in the current .blend scene"
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset_name: StringProperty(name="预设名称", default="我的动作", maxlen=64)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE" and len(obj.pose.bones) > 0)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=360)
+
+    def execute(self, context):
+        rig = context.active_object
+        raw = context.scene.get("rh_studio_pose_library", "{}")
+        try:
+            library = json.loads(raw)
+        except (TypeError, ValueError):
+            library = {}
+        library[self.preset_name.strip() or "我的动作"] = _pose_snapshot(rig)
+        context.scene["rh_studio_pose_library"] = json.dumps(library, ensure_ascii=False)
+        self.report({"INFO"}, "已保存动作预设「%s」，保存在当前 .blend 场景中。" % (self.preset_name.strip() or "我的动作"))
+        return {"FINISHED"}
+
+
+class RH_OT_load_pose_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.load_pose_preset"
+    bl_label = "载入已保存动作预设"
+    bl_description = "Load a previously saved pose from this .blend scene"
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset_name: StringProperty(name="预设名称", default="我的动作", maxlen=64)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        if not obj or obj.type != "ARMATURE":
+            return False
+        try:
+            return bool(json.loads(context.scene.get("rh_studio_pose_library", "{}")))
+        except (TypeError, ValueError):
+            return False
+
+    def invoke(self, context, event):
+        try:
+            library = json.loads(context.scene.get("rh_studio_pose_library", "{}"))
+        except (TypeError, ValueError):
+            library = {}
+        if library and self.preset_name == "我的动作":
+            self.preset_name = next(iter(library))
+        return context.window_manager.invoke_props_dialog(self, width=360)
+
+    def execute(self, context):
+        rig = context.active_object
+        try:
+            library = json.loads(context.scene.get("rh_studio_pose_library", "{}"))
+        except (TypeError, ValueError):
+            library = {}
+        pose = library.get(self.preset_name)
+        if not pose:
+            self.report({"ERROR"}, "没有找到该预设。可先保存动作，或检查名称。")
+            return {"CANCELLED"}
+        restored = 0
+        for name, values in pose.items():
+            bone = rig.pose.bones.get(name)
+            if bone is None:
+                continue
+            bone.rotation_mode = values.get("rotation_mode", "QUATERNION")
+            if "rotation_quaternion" in values:
+                bone.rotation_quaternion = values["rotation_quaternion"]
+            if "rotation_euler" in values:
+                bone.rotation_euler = values["rotation_euler"]
+            if "location" in values:
+                bone.location = values["location"]
+            if "scale" in values:
+                bone.scale = values["scale"]
+            restored += 1
+        context.view_layer.update()
+        self.report({"INFO"}, "已载入预设「%s」，恢复 %d 根骨骼。" % (self.preset_name, restored))
+        return {"FINISHED"}
+
+
+class RH_OT_check_pose_clearance(bpy.types.Operator):
+    bl_idname = "rh_studio.check_pose_clearance"
+    bl_label = "检查肢体间距 / 重叠风险"
+    bl_description = "Run simple geometric warnings for near-crossing limbs and torso intersections"
+    bl_options = {"REGISTER"}
+
+    min_clearance: FloatProperty(name="最小间距（米）", default=0.035, min=0.001, max=0.25, subtype="DISTANCE")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE")
+
+    def execute(self, context):
+        rig = context.active_object
+        context.view_layer.update()
+        def point(name, endpoint):
+            pb = rig.pose.bones.get(name)
+            if pb is None:
+                return None
+            v = pb.head if endpoint == "head" else pb.tail
+            return rig.matrix_world @ v
+        warnings = []
+        for side_a, side_b, joint in (("L", "R", "hand"), ("L", "R", "forearm"),
+                                      ("L", "R", "foot"), ("L", "R", "thigh")):
+            a = point(joint + "." + side_a, "tail")
+            b = point(joint + "." + side_b, "tail")
+            if a is not None and b is not None and (a-b).length < self.min_clearance:
+                warnings.append("%s.%s 与 %s.%s 太近" % (joint, side_a, joint, side_b))
+        chest = point("chest", "head")
+        for side in ("L", "R"):
+            hand = point("hand." + side, "tail")
+            if chest is not None and hand is not None and (chest-hand).length < self.min_clearance * 1.5:
+                warnings.append("手部可能穿入胸口：hand." + side)
+        if warnings:
+            self.report({"WARNING"}, "检测到 %d 项近距离风险：" % len(warnings) + "；".join(warnings[:4]))
+        else:
+            self.report({"INFO"}, "未发现简单距离规则触发的风险；这不是完整的网格碰撞检测。")
+        return {"FINISHED"}
+
+
+class RH_OT_turn_body_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.turn_body_preset"
+    bl_label = "身体朝向预设"
+    bl_description = "Turn the torso and head for three-quarter or side-facing poses"
+    bl_options = {"REGISTER", "UNDO"}
+
+    facing: EnumProperty(name="朝向", items=(
+        ("FRONT", "正面", "Face forward"),
+        ("THREE_QUARTER_L", "左侧 45°", "Three-quarter left"),
+        ("THREE_QUARTER_R", "右侧 45°", "Three-quarter right"),
+        ("SIDE_L", "左侧面", "Face left"),
+        ("SIDE_R", "右侧面", "Face right"),
+        ("BACK", "背面", "Face away"),
+    ), default="THREE_QUARTER_L")
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.active_object and context.active_object.type == "ARMATURE")
+
+    def execute(self, context):
+        rig = context.active_object
+        angle = {"FRONT": 0, "THREE_QUARTER_L": -45, "THREE_QUARTER_R": 45,
+                 "SIDE_L": -90, "SIDE_R": 90, "BACK": 180}[self.facing]
+        # Rotate root for global facing; add slight counter-rotation in chest/head
+        # so profile poses can be refined without forcing a perfectly rigid torso.
+        root = rig.pose.bones.get("root")
+        if root:
+            root.rotation_mode = "XYZ"
+            root.rotation_euler.z = math.radians(angle)
+        context.view_layer.update()
+        self.report({"INFO"}, "已设置身体朝向 %s。可继续分别旋转胸腔、颈部和头部。" % self.facing)
+        return {"FINISHED"}
+
+
+BODY_REACTION_TOKENS = {
+    "ANGER_VEINS": ("vein", "vascular", "bloodvessel", "blood_vessel", "veins", "血管", "青筋"),
+    "MUSCLE_TENSE": ("muscle", "tense", "flex", "bulge", "pump", "肌肉", "紧绷", "凸起"),
+}
+class RH_OT_body_reaction_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.body_reaction_preset"
+    bl_label = "情绪身体反应"
+    bl_description = "Drive existing body morph keys for reactions such as bulging veins or tense muscles"
+    bl_options = {"REGISTER", "UNDO"}
+
+    reaction: EnumProperty(name="反应", items=(
+        ("ANGER_VEINS", "愤怒：青筋凸起", "Enable recognized vein/vascular morph keys"),
+        ("MUSCLE_TENSE", "紧绷：肌肉凸起", "Enable recognized tense-muscle morph keys"),
+        ("RESET", "身体反应复位", "Reset recognized body-reaction morph keys"),
+    ), default="ANGER_VEINS")
+    amount: FloatProperty(name="强度", default=1.0, min=0.0, max=1.0, subtype="FACTOR")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and obj.data.shape_keys
+                    and len(obj.data.shape_keys.key_blocks) > 1)
+
+    def execute(self, context):
+        obj = context.active_object
+        keys = list(obj.data.shape_keys.key_blocks)[1:]
+        groups = {name: [key for key in keys if any(token in key.name.lower() for token in tokens)]
+                  for name, tokens in BODY_REACTION_TOKENS.items()}
+        reaction_keys = [key for values in groups.values() for key in values]
+        if self.reaction == "RESET":
+            for key in reaction_keys:
+                key.value = 0.0
+            self.report({"INFO"}, "已复位 %d 个可识别的身体反应形态键。" % len(reaction_keys))
+            return {"FINISHED"} if reaction_keys else {"CANCELLED"}
+        matched = groups.get(self.reaction, [])
+        if not matched:
+            self.report({"WARNING"}, "没有找到血管/肌肉反应形态键；需要模型本身提供这些 morph/Shape Keys。")
+            return {"CANCELLED"}
+        for key in reaction_keys:
+            key.value = 0.0
+        for key in matched:
+            key.value = self.amount
+        self.report({"INFO"}, "已设置 %d 个身体反应形态键，强度 %.2f。" % (len(matched), self.amount))
+        return {"FINISHED"}
+
+
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,
-    RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
+    RH_OT_insert_pose_keyframe, RH_OT_expression_preset,\n    RH_OT_save_pose_preset, RH_OT_load_pose_preset,\n    RH_OT_check_pose_clearance, RH_OT_turn_body_preset, RH_OT_body_reaction_preset,
 )
 
 def register():
