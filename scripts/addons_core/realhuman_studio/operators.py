@@ -1059,17 +1059,20 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
                 or ctx.region.type != "WINDOW"):
             return
 
-        shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+        # Blender 4.5+ requires the POLYLINE shader variant for reliable
+        # line widths; gpu.state.line_width_set() alone is not sufficient.
+        shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
 
         def line(points, color, width=2.0, closed=False):
             if len(points) < 2:
                 return
-            coords = list(points)
+            coords = [(point[0], point[1], 0.0) for point in points]
             if closed:
                 coords.append(coords[0])
             batch = batch_for_shader(shader, "LINE_STRIP", {"pos": coords})
-            gpu.state.line_width_set(width)
             shader.bind()
+            shader.uniform_float("viewportSize", gpu.state.viewport_get()[2:])
+            shader.uniform_float("lineWidth", float(width))
             shader.uniform_float("color", color)
             batch.draw(shader)
 
@@ -1114,7 +1117,6 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
             blf.position(0, self._cx - 105, self._cy - 124, 0)
             blf.draw(0, "K 记录关键帧 · R 复位 · Esc 退出")
         finally:
-            gpu.state.line_width_set(1.0)
             gpu.state.blend_set("NONE")
 
     def _remove_handler(self):
