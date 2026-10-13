@@ -19,6 +19,8 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 - Generate a simple stick-display humanoid armature proportioned from a selected mesh's bounding box, with optional Blender automatic weights.
 - Apply starter poses (reset/T-pose, relaxed, arms-up, sitting, wave) and insert animation keyframes at the current timeline frame.
 - Apply basic expression presets by matching common English/Chinese names of shape keys already present on the active mesh.
+- Save/load named pose presets inside the current `.blend` scene, add body-facing presets (front, three-quarter, side, back), and run a lightweight limb-clearance warning check.
+- Trigger existing body-reaction morph keys for effects such as bulging veins or tense muscles, when the imported model actually provides those shape keys.
 
 ## Use
 
@@ -36,7 +38,7 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 - Height calibration is a scale operation, not anatomical retopology or proportion-aware reshaping.
 - The app still runs on the Blender host UI; a finished standalone RealHuman Studio startup template and Windows packaging are future work.
 - The asset repositories need a separate license-aware download, coordinate alignment, naming, and integration pass. Do not treat Git LFS pointer text as model data.
-- The procedural fabric-print material and simple rig/pose helpers have been added to source but still need in-Blender runtime tests, including weight deformation, bone orientation, pose quality, shape-key name matching, node-socket compatibility, and different UV layouts.
+- The procedural fabric-print material and rig/pose helpers have been added to source but still need in-Blender runtime tests, including weight deformation, bone orientation, pose quality, clearance warning quality, shape-key name matching, node-socket compatibility, and different UV layouts.
 - The Blender C/C++ core is untouched in this phase.
 
 ## License
