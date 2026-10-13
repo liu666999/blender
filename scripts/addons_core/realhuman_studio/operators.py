@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Functional operators for the RealHuman Studio workflow."""
 import json
+import math
 import os
 from pathlib import Path
 import bpy
-from bpy.props import EnumProperty, FloatProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
-from mathutils import Vector
+from mathutils import Quaternion, Vector
 from . import CATEGORY_ITEMS
 
 ROOT_COLLECTION = "RealHuman Studio"
@@ -429,11 +430,328 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         self.report({"INFO"}, "已为 %d 个网格生成布料印花材质。请确保服装有可用 UV。" % len(meshes))
         return {"FINISHED"}
 
+
+
+# ---------------------------------------------------------------------------
+# Simple stick-figure rig, pose presets, keyframing, and expression shortcuts
+# ---------------------------------------------------------------------------
+def _bone_roll_axis(name):
+    if name.startswith(("upper_arm", "forearm", "hand", "clavicle")):
+        return Vector((0.0, 0.0, 1.0))
+    if name.startswith(("thigh", "shin", "foot", "root", "spine", "chest", "neck", "head")):
+        return Vector((1.0, 0.0, 0.0))
+    return Vector((0.0, 0.0, 1.0))
+
+
+class RH_OT_generate_simple_rig(bpy.types.Operator):
+    bl_idname = "rh_studio.generate_simple_rig"
+    bl_label = "生成火柴人骨架"
+    bl_description = "Create a lightweight humanoid stick rig proportioned to the active mesh"
+    bl_options = {"REGISTER", "UNDO"}
+
+    auto_bind: BoolProperty(
+        name="尝试自动权重绑定",
+        description="After creating the rig, ask Blender to bind the selected mesh with automatic weights",
+        default=True,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH")
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=440)
+
+    def draw(self, context):
+        self.layout.label(text="按当前人体网格包围盒估算关节位置。")
+        self.layout.label(text="生成后仍需检查肩、肘、膝和衣物的变形。")
+        self.layout.prop(self, "auto_bind")
+
+    def execute(self, context):
+        mesh = context.active_object
+        if not mesh or mesh.type != "MESH":
+            self.report({"ERROR"}, "请先选择人体网格。")
+            return {"CANCELLED"}
+
+        world_corners = [mesh.matrix_world @ Vector(corner) for corner in mesh.bound_box]
+        if not world_corners:
+            self.report({"ERROR"}, "无法读取人体网格边界。")
+            return {"CANCELLED"}
+        min_x = min(p.x for p in world_corners)
+        max_x = max(p.x for p in world_corners)
+        min_y = min(p.y for p in world_corners)
+        max_y = max(p.y for p in world_corners)
+        min_z = min(p.z for p in world_corners)
+        max_z = max(p.z for p in world_corners)
+        height = max_z - min_z
+        if height < 0.1:
+            self.report({"ERROR"}, "网格高度异常，无法估算人体关节。")
+            return {"CANCELLED"}
+
+        cx = (min_x + max_x) * 0.5
+        cy = (min_y + max_y) * 0.5
+        h = height
+        hip_z = min_z + 0.535 * h
+        chest_z = min_z + 0.765 * h
+        shoulder_z = min_z + 0.805 * h
+        neck_z = min_z + 0.865 * h
+        head_z = min_z + 0.895 * h
+        head_top = min_z + 0.985 * h
+        knee_z = min_z + 0.285 * h
+        ankle_z = min_z + 0.055 * h
+        hip_half = max(0.055 * h, min(0.085 * h, (max_x - min_x) * 0.09))
+        shoulder_half = 0.12 * h
+        elbow_dist = 0.29 * h
+        wrist_dist = 0.465 * h
+        hand_dist = 0.50 * h
+        foot_len = max(0.07 * h, (max_y - min_y) * 0.30)
+
+        # Each tuple: head, tail, parent name, connected flag.
+        bones = {
+            "root": ((cx, cy, hip_z - 0.045*h), (cx, cy, hip_z), None, False),
+            "spine": ((cx, cy, hip_z), (cx, cy, chest_z), "root", True),
+            "chest": ((cx, cy, chest_z), (cx, cy, neck_z), "spine", True),
+            "neck": ((cx, cy, neck_z), (cx, cy, head_z), "chest", True),
+            "head": ((cx, cy, head_z), (cx, cy, head_top), "neck", True),
+        }
+        for side, sign in (("L", -1.0), ("R", 1.0)):
+            hip = (cx + sign*hip_half, cy, hip_z)
+            knee = (cx + sign*hip_half*1.08, cy, knee_z)
+            ankle = (cx + sign*hip_half*1.08, cy, ankle_z)
+            toe = (ankle[0], cy - foot_len, ankle_z + 0.005*h)
+            shoulder = (cx + sign*shoulder_half, cy, shoulder_z)
+            elbow = (cx + sign*elbow_dist, cy, shoulder_z - 0.01*h)
+            wrist = (cx + sign*wrist_dist, cy, shoulder_z - 0.025*h)
+            hand_tip = (cx + sign*hand_dist, cy - 0.015*h, shoulder_z - 0.025*h)
+            bones["thigh." + side] = (hip, knee, "root", False)
+            bones["shin." + side] = (knee, ankle, "thigh." + side, True)
+            bones["foot." + side] = (ankle, toe, "shin." + side, True)
+            bones["upper_arm." + side] = (shoulder, elbow, "chest", False)
+            bones["forearm." + side] = (elbow, wrist, "upper_arm." + side, True)
+            bones["hand." + side] = (wrist, hand_tip, "forearm." + side, True)
+
+        arm_data = bpy.data.armatures.new("RH Simple Human Rig")
+        rig = bpy.data.objects.new("RH Stick Rig", arm_data)
+        context.scene.collection.objects.link(rig)
+        rig.show_in_front = True
+        arm_data.display_type = "STICK"
+
+        try:
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except RuntimeError:
+            pass
+        for obj in list(context.selected_objects):
+            obj.select_set(False)
+        rig.select_set(True)
+        context.view_layer.objects.active = rig
+        bpy.ops.object.mode_set(mode="EDIT")
+        edit_bones = {}
+        for name, (head, tail, parent_name, connected) in bones.items():
+            bone = arm_data.edit_bones.new(name)
+            bone.head = head
+            bone.tail = tail
+            bone.use_connect = False
+            try:
+                bone.align_roll(_bone_roll_axis(name))
+            except (RuntimeError, ValueError):
+                pass
+            edit_bones[name] = bone
+        for name, (_head, _tail, parent_name, connected) in bones.items():
+            bone = edit_bones[name]
+            if parent_name:
+                bone.parent = edit_bones[parent_name]
+                bone.use_connect = connected
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        move_objects_to_category([rig], context.scene, "RIG")
+        rig["rh_studio_rig_type"] = "simple_stick_humanoid"
+        rig["rh_studio_source_mesh"] = mesh.name
+
+        bound = False
+        if self.auto_bind:
+            try:
+                for obj in list(context.selected_objects):
+                    obj.select_set(False)
+                mesh.select_set(True)
+                rig.select_set(True)
+                context.view_layer.objects.active = rig
+                bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+                bound = bool(mesh.parent == rig and any(mod.type == "ARMATURE" and mod.object == rig
+                                                        for mod in mesh.modifiers))
+            except Exception as exc:
+                self.report({"WARNING"}, "骨架已生成，但自动权重绑定失败；可先手动绑定后继续。原因：" + str(exc))
+        # Select the rig so the user can immediately inspect/edit the stick bones.
+        for obj in list(context.selected_objects):
+            obj.select_set(False)
+        rig.select_set(True)
+        context.view_layer.objects.active = rig
+        if bound:
+            self.report({"INFO"}, "火柴人骨架已生成，且已尝试自动权重绑定。请检查关节变形。")
+        elif self.auto_bind:
+            self.report({"WARNING"}, "火柴人骨架已生成，但未确认绑定成功；请检查人体的 Armature 修改器和权重。")
+        else:
+            self.report({"INFO"}, "火柴人骨架已生成。可切换姿势预设并记录关键帧。")
+        return {"FINISHED"}
+
+
+def _rotate_pose_bone_about_world_axis(armature, bone_name, axis, degrees):
+    pose_bone = armature.pose.bones.get(bone_name)
+    data_bone = armature.data.bones.get(bone_name)
+    if pose_bone is None or data_bone is None:
+        return False
+    pose_bone.rotation_mode = "QUATERNION"
+    bone_world_orientation = (
+        armature.matrix_world.to_quaternion() @ data_bone.matrix_local.to_quaternion()
+    )
+    world_delta = Quaternion(Vector(axis), math.radians(degrees))
+    local_delta = bone_world_orientation.inverted() @ world_delta @ bone_world_orientation
+    pose_bone.rotation_quaternion = local_delta @ pose_bone.rotation_quaternion
+    return True
+
+
+class RH_OT_apply_pose_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.apply_pose_preset"
+    bl_label = "应用动作姿势预设"
+    bl_description = "Apply a simple pose to a compatible humanoid armature"
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset: EnumProperty(name="姿势预设", items=(
+        ("REST", "复位 / T 字站姿", "Reset pose bones to their rest pose"),
+        ("RELAXED", "自然放松站姿", "Lower arms to a relaxed angle"),
+        ("ARMS_UP", "双手举起", "Raise both arms"),
+        ("SITTING", "坐姿", "Rotate thighs forward and bend the knees"),
+        ("WAVE", "挥手", "Raise the right arm and bend the elbow"),
+    ), default="RELAXED")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE")
+
+    def execute(self, context):
+        rig = context.active_object
+        for pose_bone in rig.pose.bones:
+            pose_bone.rotation_mode = "QUATERNION"
+            pose_bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+            pose_bone.location = (0.0, 0.0, 0.0)
+        recognized = 0
+
+        def rotate(name, axis, angle):
+            nonlocal recognized
+            if _rotate_pose_bone_about_world_axis(rig, name, axis, angle):
+                recognized += 1
+
+        if self.preset == "RELAXED":
+            for side, sign in (("L", -1.0), ("R", 1.0)):
+                rotate("upper_arm." + side, (0, 1, 0), sign * 48.0)
+                rotate("forearm." + side, (1, 0, 0), sign * 8.0)
+        elif self.preset == "ARMS_UP":
+            for side, sign in (("L", -1.0), ("R", 1.0)):
+                rotate("upper_arm." + side, (0, 1, 0), -sign * 72.0)
+        elif self.preset == "SITTING":
+            for side in ("L", "R"):
+                rotate("thigh." + side, (1, 0, 0), -65.0)
+                rotate("shin." + side, (1, 0, 0), 78.0)
+        elif self.preset == "WAVE":
+            rotate("upper_arm.R", (0, 1, 0), -108.0)
+            rotate("forearm.R", (1, 0, 0), 68.0)
+            rotate("hand.R", (0, 1, 0), 18.0)
+        if self.preset != "REST" and recognized == 0:
+            self.report({"WARNING"}, "当前骨架未找到 RealHuman 简易人形骨骼命名；已重置姿势。")
+            return {"CANCELLED"}
+        context.view_layer.update()
+        self.report({"INFO"}, "已应用姿势预设「%s」。可继续手动旋转单根骨骼。" % self.preset)
+        return {"FINISHED"}
+
+
+class RH_OT_insert_pose_keyframe(bpy.types.Operator):
+    bl_idname = "rh_studio.insert_pose_keyframe"
+    bl_label = "记录当前姿势关键帧"
+    bl_description = "Insert rotation/location keyframes for all pose bones at the current timeline frame"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE" and len(obj.pose.bones) > 0)
+
+    def execute(self, context):
+        rig = context.active_object
+        frame = context.scene.frame_current
+        inserted = 0
+        for pose_bone in rig.pose.bones:
+            pose_bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=pose_bone.name)
+            pose_bone.keyframe_insert(data_path="location", frame=frame, group=pose_bone.name)
+            inserted += 1
+        if rig.animation_data and rig.animation_data.action:
+            rig.animation_data.action.name = rig.animation_data.action.name or "RH Pose Action"
+        self.report({"INFO"}, "已在第 %d 帧为 %d 根骨骼记录关键帧。" % (frame, inserted))
+        return {"FINISHED"}
+
+
+EXPRESSION_TOKENS = {
+    "SMILE": ("smile", "happy", "joy", "grin", "微笑", "嘴角上扬", "笑"),
+    "SAD": ("sad", "frown", "sadness", "悲伤", "难过", "沮丧"),
+    "ANGRY": ("angry", "anger", "browdown", "brow_down", "愤怒", "生气"),
+    "SURPRISE": ("surprise", "jawopen", "jaw_open", "mouthopen", "wideeye", "惊讶", "张嘴", "瞪眼"),
+    "BLINK": ("blink", "eyeclose", "eye_close", "closeeye", "眨眼", "闭眼"),
+}
+EXPRESSION_HINTS = tuple(token for group in EXPRESSION_TOKENS.values() for token in group)
+
+
+class RH_OT_expression_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.expression_preset"
+    bl_label = "表情预设"
+    bl_description = "Drive facial shape keys already present on the active mesh using common name matching"
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset: EnumProperty(name="表情", items=(
+        ("SMILE", "微笑", "Set recognized smile-related shape keys"),
+        ("SAD", "悲伤", "Set recognized sadness-related shape keys"),
+        ("ANGRY", "愤怒", "Set recognized anger/brow-related shape keys"),
+        ("SURPRISE", "惊讶", "Set recognized surprise/eye/mouth shape keys"),
+        ("BLINK", "眨眼", "Set recognized eye-blink shape keys"),
+        ("RESET", "表情复位", "Reset recognized expression shape keys"),
+    ), default="SMILE")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and obj.data.shape_keys
+                    and len(obj.data.shape_keys.key_blocks) > 1)
+
+    def execute(self, context):
+        obj = context.active_object
+        keys = list(obj.data.shape_keys.key_blocks)[1:]
+        expression_keys = [key for key in keys
+                           if any(token in key.name.lower() for token in EXPRESSION_HINTS)]
+        if self.preset == "RESET":
+            for key in expression_keys:
+                key.value = 0.0
+            self.report({"INFO"}, "已复位 %d 个可识别的表情形态键。" % len(expression_keys))
+            return {"FINISHED"} if expression_keys else {"CANCELLED"}
+
+        tokens = EXPRESSION_TOKENS[self.preset]
+        matched = [key for key in expression_keys
+                   if any(token in key.name.lower() for token in tokens)]
+        if not matched:
+            self.report({"WARNING"}, "没有找到名称可识别的表情形态键；请确认模型已有表情 Shape Keys。")
+            return {"CANCELLED"}
+        for key in expression_keys:
+            key.value = 0.0
+        for key in matched:
+            key.value = 1.0
+        self.report({"INFO"}, "已触发 %d 个匹配的表情形态键。" % len(matched))
+        return {"FINISHED"}
+
+
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
-    RH_OT_create_fabric_print,
+    RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
+    RH_OT_apply_pose_preset, RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
 )
 
 def register():
