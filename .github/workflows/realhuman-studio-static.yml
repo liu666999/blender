@@ -17,10 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            scripts/addons_core/realhuman_studio
-            tests
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -29,26 +25,30 @@ jobs:
 
   blender-runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: python-syntax
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: "4.5.14"
+            series: "4.5"
+          - version: "5.2.2"
+            series: "5.2"
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            scripts/addons_core/realhuman_studio
-            tests
-      - name: Download Blender 4.5 LTS
+      - name: Download Blender \${{ matrix.version }}
         shell: bash
         run: |
           set -euo pipefail
-          BLENDER_ARCHIVE="$RUNNER_TEMP/blender-4.5.14-linux-x64.tar.xz"
+          BLENDER_ARCHIVE="$RUNNER_TEMP/blender-\${{ matrix.version }}-linux-x64.tar.xz"
           curl --fail --location --retry 3 --retry-delay 2 \
-            "https://download.blender.org/release/Blender4.5/blender-4.5.14-linux-x64.tar.xz" \
+            "https://download.blender.org/release/Blender\${{ matrix.series }}/blender-\${{ matrix.version }}-linux-x64.tar.xz" \
             --output "$BLENDER_ARCHIVE"
           tar -xJf "$BLENDER_ARCHIVE" -C "$RUNNER_TEMP"
       - name: Run add-on runtime smoke tests
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/blender-4.5.14-linux-x64/blender" \
+          "$RUNNER_TEMP/blender-\${{ matrix.version }}-linux-x64/blender" \
             --background --factory-startup --python tests/realhuman_studio_smoke.py
