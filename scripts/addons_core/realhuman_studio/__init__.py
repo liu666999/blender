@@ -10,7 +10,6 @@ bl_info = {
 }
 import bpy
 from bpy.props import EnumProperty, FloatProperty, StringProperty
-from . import operators, ui
 
 CATEGORY_ITEMS = (
     ("BASE_BODY", "基础人体", "Primary full-body mesh"),
@@ -24,6 +23,8 @@ CATEGORY_ITEMS = (
     ("RIG", "骨架绑定", "Armature and rigging objects"),
     ("OTHER", "其他", "Other imported assets"),
 )
+
+from . import operators, ui
 
 def register():
     bpy.types.Scene.rh_studio_import_category = EnumProperty(
