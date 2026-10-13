@@ -41,6 +41,12 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 - The procedural fabric-print material and rig/pose helpers have been added to source but still need in-Blender runtime tests, including weight deformation, bone orientation, pose quality, clearance warning quality, shape-key name matching, node-socket compatibility, and different UV layouts.
 - The Blender C/C++ core is untouched in this phase.
 
+## Runtime compatibility
+
+- The add-on no longer requires Blender 5.x; its declared minimum is Blender 4.5.0, with CI exercising Blender 4.5.14 LTS headlessly.
+- The runtime smoke test covers add-on registration/unregistration, rig generation, pose presets, keyframing, pose save/load, facing and clearance operators, fabric material construction, and project manifest creation.
+- The headless smoke test cannot exercise interactive GPU overlay drawing or real mouse input; those still need a GUI-session check.
+
 ## License
 
 New RealHuman Studio source files in this folder are licensed under GPL-3.0-or-later, as suitable for modifications distributed alongside Blender. Licenses for any later third-party assets must be reviewed separately and retained.
