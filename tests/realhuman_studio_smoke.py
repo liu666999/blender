@@ -54,8 +54,9 @@ def run():
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.95))
     mesh = bpy.context.object
     mesh.name = "RH CI Human Mesh"
-    mesh.scale = (0.28, 0.18, 0.95)
+    mesh.scale = (0.28, 0.18, 1.8)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bpy.context.view_layer.update()
     ensure(mesh.dimensions.z > 1.5, "Test mesh should be tall enough to rig.")
     activate(mesh)
 
