@@ -312,8 +312,8 @@ class RH_OT_export_model(bpy.types.Operator, ExportHelper):
         extensions = {"GLB": ".glb", "FBX": ".fbx", "OBJ": ".obj"}
         filepath = os.path.abspath(bpy.path.abspath(self.filepath))
         extension = extensions[self.export_format]
-        if not filepath.lower().endswith(extension):
-            filepath += extension
+        if Path(filepath).suffix.lower() != extension:
+            filepath = str(Path(filepath).with_suffix(extension))
         try:
             if self.export_format == "GLB":
                 bpy.ops.export_scene.gltf(filepath=filepath, export_format="GLB", use_selection=True)
