@@ -1,0 +1,22 @@
+name: RealHuman Studio static checks
+
+on:
+  push:
+    paths:
+      - "scripts/addons_core/realhuman_studio/**"
+      - ".github/workflows/realhuman-studio-static.yml"
+  pull_request:
+    paths:
+      - "scripts/addons_core/realhuman_studio/**"
+      - ".github/workflows/realhuman-studio-static.yml"
+
+jobs:
+  python-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Python files
+        run: python -m compileall -q scripts/addons_core/realhuman_studio
