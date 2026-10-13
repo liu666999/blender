@@ -777,7 +777,8 @@ CLASSES = (
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
-    RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,\n    RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
+    RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,
+    RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
 )
 
 def register():
