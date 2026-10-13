@@ -1,13 +1,15 @@
-name: RealHuman Studio static checks
+name: RealHuman Studio checks
 
 on:
   push:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
+      - "tests/realhuman_studio_smoke.py"
       - ".github/workflows/realhuman-studio-static.yml"
   pull_request:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
+      - "tests/realhuman_studio_smoke.py"
       - ".github/workflows/realhuman-studio-static.yml"
 
 jobs:
@@ -19,4 +21,26 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile Python files
-        run: python -m compileall -q scripts/addons_core/realhuman_studio
+        run: python -m compileall -q scripts/addons_core/realhuman_studio tests/realhuman_studio_smoke.py
+
+  blender-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: python-syntax
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Blender 4.5 LTS
+        shell: bash
+        run: |
+          set -euo pipefail
+          BLENDER_ARCHIVE="$RUNNER_TEMP/blender-4.5.14-linux-x64.tar.xz"
+          curl --fail --location --retry 3 --retry-delay 2 \
+            "https://download.blender.org/release/Blender4.5/blender-4.5.14-linux-x64.tar.xz" \
+            --output "$BLENDER_ARCHIVE"
+          tar -xJf "$BLENDER_ARCHIVE" -C "$RUNNER_TEMP"
+      - name: Run add-on runtime smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/blender-4.5.14-linux-x64/blender" \
+            --background --factory-startup --python tests/realhuman_studio_smoke.py
