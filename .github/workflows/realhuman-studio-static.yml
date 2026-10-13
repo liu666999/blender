@@ -37,18 +37,18 @@ jobs:
             series: "5.2"
     steps:
       - uses: actions/checkout@v4
-      - name: Download Blender \${{ matrix.version }}
+      - name: Download Blender ${{ matrix.version }}
         shell: bash
         run: |
           set -euo pipefail
-          BLENDER_ARCHIVE="$RUNNER_TEMP/blender-\${{ matrix.version }}-linux-x64.tar.xz"
+          BLENDER_ARCHIVE="$RUNNER_TEMP/blender-${{ matrix.version }}-linux-x64.tar.xz"
           curl --fail --location --retry 3 --retry-delay 2 \
-            "https://download.blender.org/release/Blender\${{ matrix.series }}/blender-\${{ matrix.version }}-linux-x64.tar.xz" \
+            "https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz" \
             --output "$BLENDER_ARCHIVE"
           tar -xJf "$BLENDER_ARCHIVE" -C "$RUNNER_TEMP"
       - name: Run add-on runtime smoke tests
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/blender-\${{ matrix.version }}-linux-x64/blender" \
+          "$RUNNER_TEMP/blender-${{ matrix.version }}-linux-x64/blender" \
             --background --factory-startup --python tests/realhuman_studio_smoke.py
