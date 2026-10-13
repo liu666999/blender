@@ -82,6 +82,9 @@ class RH_PT_main(bpy.types.Panel):
         is_rig = bool(context.active_object and context.active_object.type == "ARMATURE")
         pose_controls = rig_box.column()
         pose_controls.enabled = is_rig
+        if is_rig:
+            mode_label = "退出姿势编辑" if context.active_object.mode == "POSE" else "进入姿势编辑（旋转骨骼）"
+            pose_controls.operator("rh_studio.toggle_pose_mode", text=mode_label)
         row = pose_controls.row(align=True)
         for preset, label in (("REST", "站立复位"), ("RELAXED", "放松"), ("ARMS_UP", "举手")):
             op = row.operator("rh_studio.apply_pose_preset", text=label)
