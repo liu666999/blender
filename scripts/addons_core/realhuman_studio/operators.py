@@ -408,15 +408,14 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         threshold.location = (-100, 80)
         threshold.inputs[1].default_value = max(0.02, 1.0 - self.sparsity)
         links.new(value_socket, threshold.inputs[0])
-        mix = nodes.new("ShaderNodeMix")
-        mix.data_type = "RGBA"
+        mix = nodes.new("ShaderNodeMixRGB")
         mix.location = (150, 80)
-        mix.inputs["Factor"].default_value = 0.5
+        mix.blend_type = "MIX"
         # RGBA Mix sockets are typed and exposed by Blender 4.x/5.x.
         links.new(threshold.outputs[0], mix.inputs[0])
-        mix.inputs[6].default_value = self.base_color
-        mix.inputs[7].default_value = self.print_color
-        links.new(mix.outputs[2], shader.inputs["Base Color"])
+        mix.inputs[1].default_value = self.base_color
+        mix.inputs[2].default_value = self.print_color
+        links.new(mix.outputs[0], shader.inputs["Base Color"])
         for obj in meshes:
             if not obj.data.materials:
                 obj.data.materials.append(material)
