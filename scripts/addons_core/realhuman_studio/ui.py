@@ -79,7 +79,7 @@ class RH_PT_main(bpy.types.Panel):
         rig_box.label(text="动作 / 火柴人骨架", icon="ARMATURE_DATA")
         rig_box.label(text="从当前人体网格估算骨骼；生成后可在视图中选骨骼旋转。")
         rig_box.operator("rh_studio.generate_simple_rig", icon="ARMATURE_DATA", text="生成火柴人骨架")
-        rig_box.label(text="动作输入只用圆头 + 大字身体，拖动手脚端点即可粗调姿势。")
+        rig_box.label(text="极简圆头 + 大字身体；只拖四个手脚端点。")
         is_rig = bool(context.active_object and context.active_object.type == "ARMATURE")
         pose_controls = rig_box.column()
         pose_controls.enabled = is_rig
@@ -108,7 +108,8 @@ class RH_PT_main(bpy.types.Panel):
         for facing, label in (("SIDE_L", "左侧"), ("SIDE_R", "右侧"), ("BACK", "背面")):
             op = facing_row.operator("rh_studio.turn_body_preset", text=label)
             op.facing = facing
-        pose_controls.label(text="在时间轴切换帧、调整骨骼，再次记录即可组成动作。")
+        pose_controls.label(text="简笔模式：K 记录关键帧，R 复位，Esc / 右键退出。")
+        pose_controls.label(text="也可在时间轴换帧，反复摆姿并记录，组成动作。")
 
         face_box = layout.box()
         face_box.label(text="面部表情预设", icon="SHAPEKEY_DATA")
