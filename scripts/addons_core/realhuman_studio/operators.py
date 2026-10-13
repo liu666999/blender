@@ -432,7 +432,8 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,\n    RH_OT_create_fabric_print,
+    RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_create_fabric_print,
 )
 
 def register():
