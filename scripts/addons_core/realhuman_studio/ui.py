@@ -80,17 +80,18 @@ class RH_PT_main(bpy.types.Panel):
         rig_box.label(text="从当前人体网格估算骨骼；生成后可在视图中选骨骼旋转。")
         rig_box.operator("rh_studio.generate_simple_rig", icon="ARMATURE_DATA", text="生成火柴人骨架")
         is_rig = bool(context.active_object and context.active_object.type == "ARMATURE")
-        rig_box.enabled = is_rig
-        row = rig_box.row(align=True)
+        pose_controls = rig_box.column()
+        pose_controls.enabled = is_rig
+        row = pose_controls.row(align=True)
         for preset, label in (("REST", "站立复位"), ("RELAXED", "放松"), ("ARMS_UP", "举手")):
             op = row.operator("rh_studio.apply_pose_preset", text=label)
             op.preset = preset
-        row = rig_box.row(align=True)
+        row = pose_controls.row(align=True)
         for preset, label in (("SITTING", "坐姿"), ("WAVE", "挥手")):
             op = row.operator("rh_studio.apply_pose_preset", text=label)
             op.preset = preset
-        rig_box.operator("rh_studio.insert_pose_keyframe", icon="KEY_HLT", text="记录当前帧关键姿势")
-        rig_box.label(text="在时间轴切换帧、调整骨骼，再次记录即可组成动作。")
+        pose_controls.operator("rh_studio.insert_pose_keyframe", icon="KEY_HLT", text="记录当前帧关键姿势")
+        pose_controls.label(text="在时间轴切换帧、调整骨骼，再次记录即可组成动作。")
 
         face_box = layout.box()
         face_box.label(text="面部表情预设", icon="SHAPEKEY_DATA")
