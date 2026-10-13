@@ -45,8 +45,9 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 
 New RealHuman Studio source files in this folder are licensed under GPL-3.0-or-later, as suitable for modifications distributed alongside Blender. Licenses for any later third-party assets must be reviewed separately and retained.
 
-
 ### 极简 2D 简笔摆姿
-- 打开「简笔摆姿」后只显示圆形头部和「大」字形躯干/四肢，不显示肘、膝等中间关节点。
-- 拖动手部或脚部末端即可粗调对应手臂/大腿的方向；按 `Esc` 或右键退出。
-- 这是当前视图平面内的粗姿势控制，不是从任意 2D 草图完整反解 3D 姿态，也不包含自动肢体长度拟合或网格碰撞解算。
+- 绘制内容精简为圆形头部、躯干和斜向四肢；不画肘、膝等中间关节点，只保留四个可拖动端点。
+- 绘制目标区域固定到启动按钮所在 3D 视图的 `WINDOW` 区域，鼠标用窗口坐标换算，避免按钮位于侧栏时绘制/命中坐标错位。
+- 拖动手部或脚部端点粗调对应手臂/大腿方向；`K` 记录当前帧所有骨骼关键帧，`R` 将简笔和受控骨骼复位到启动时姿势，`Esc` 或右键结束编辑。中键和滚轮继续交还视图导航。
+- 世界轴旋转会考虑父骨骼当前姿态；记录关键帧时分别处理四元数、欧拉角和轴角旋转模式。
+- 这是二维视图平面中的粗姿势控制，不是完整的二维到三维反解，不含自动肢体长度拟合或真实网格碰撞解算。仍需在 Blender 5.2 中对不同视图朝向、模型绑定权重和关键帧回放进行实际运行测试。
