@@ -516,6 +516,191 @@ class RH_OT_scan_missing_sources(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
+    bl_idname = "rh_studio.apply_missing_source_repairs"
+    bl_label = "应用安全候选修复"
+    bl_description = "Apply only unique same-name, same-extension, exact-size matches after a confirmation dialog"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filepath: StringProperty(name="候选报告", subtype="FILE_PATH", default="//logs/missing_source_candidates.json")
+
+    def invoke(self, context, event):
+        root = os.path.abspath(bpy.path.abspath(context.scene.rh_studio_project_root or "//"))
+        self.filepath = os.path.join(root, "logs", "missing_source_candidates.json")
+        return context.window_manager.invoke_props_dialog(self, width=520)
+
+    def draw(self, context):
+        self.layout.prop(self, "filepath")
+        self.layout.label(text="只处理唯一同名、扩展名一致且文件大小精确匹配的候选。", icon="INFO")
+        self.layout.label(text="应用前会再次核对当前对象、文件与项目导入历史。")
+        self.layout.label(text="有歧义或批次不一致的记录会跳过，不会强行修复。")
+
+    def execute(self, context):
+        report_path = os.path.abspath(bpy.path.abspath(self.filepath))
+        try:
+            with open(report_path, "r", encoding="utf-8") as stream:
+                report = json.load(stream)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self.report({"ERROR"}, "无法读取候选报告，未修改任何数据：" + str(exc))
+            return {"CANCELLED"}
+        if not isinstance(report, dict) or report.get("schema") != "realhuman_studio_missing_source_candidates_v1" or not isinstance(report.get("objects"), list):
+            self.report({"ERROR"}, "候选报告格式或版本不受支持，未修改任何数据。")
+            return {"CANCELLED"}
+
+        project_root = os.path.abspath(bpy.path.abspath(context.scene.rh_studio_project_root or "//"))
+        manifest_path = os.path.join(project_root, "realhuman_project.json")
+        if not os.path.isfile(manifest_path):
+            self.report({"ERROR"}, "缺少 realhuman_project.json；无法校验导入批次，未修改任何数据。")
+            return {"CANCELLED"}
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as stream:
+                manifest = json.load(stream)
+            if not isinstance(manifest, dict) or not isinstance(manifest.get("asset_sources"), list):
+                raise ValueError("asset_sources 必须是 JSON 数组")
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            self.report({"ERROR"}, "项目清单无效，未修改任何数据：" + str(exc))
+            return {"CANCELLED"}
+
+        entries = manifest["asset_sources"]
+        grouped = {}
+        rejected = 0
+        for record in report["objects"]:
+            if not isinstance(record, dict) or record.get("candidate_status") != "unique_exact_size_match":
+                rejected += 1
+                continue
+            batch_id = str(record.get("batch_id", ""))
+            object_name = str(record.get("object_name", ""))
+            old_path = str(record.get("missing_source_path", ""))
+            filename = str(record.get("filename", ""))
+            extension = str(record.get("extension", "")).lower()
+            expected_size = record.get("expected_size_bytes")
+            candidates = record.get("candidates", [])
+            exact_candidates = [item for item in candidates if isinstance(item, dict) and item.get("size_match") is True]
+            if (not batch_id or not object_name or not old_path or not filename
+                    or not isinstance(expected_size, int) or expected_size < 0
+                    or len(exact_candidates) != 1 or len(candidates) != 1):
+                rejected += 1
+                continue
+            candidate = exact_candidates[0]
+            target = os.path.normpath(os.path.abspath(str(candidate.get("path", ""))))
+            old_abs = os.path.normpath(os.path.abspath(bpy.path.abspath(old_path)))
+            obj = bpy.data.objects.get(object_name)
+            if obj is None or str(obj.get("rh_studio_import_batch_id", "")) != batch_id:
+                rejected += 1
+                continue
+            current_source = str(obj.get("rh_studio_source_path", ""))
+            current_abs = os.path.normpath(os.path.abspath(bpy.path.abspath(current_source))) if current_source else ""
+            if current_abs != old_abs or os.path.isfile(current_abs):
+                rejected += 1
+                continue
+            if (os.path.basename(target).casefold() != filename.casefold()
+                    or Path(target).suffix.lower() != extension
+                    or Path(filename).suffix.lower() != extension
+                    or not os.path.isfile(target)):
+                rejected += 1
+                continue
+            try:
+                target_size = os.path.getsize(target)
+            except OSError:
+                rejected += 1
+                continue
+            if (target_size != expected_size or candidate.get("size_bytes") != expected_size
+                    or candidate.get("size_match") is not True):
+                rejected += 1
+                continue
+            grouped.setdefault(batch_id, []).append({
+                "object": obj, "old_path": current_source, "old_abs": old_abs,
+                "target": target, "expected_size": expected_size,
+            })
+
+        # A batch is repairable only if its history is unique and all records in
+        # that batch agree on the same original and replacement paths.
+        approved = []
+        batch_entry_by_id = {}
+        for batch_id, records in grouped.items():
+            matching = [entry for entry in entries
+                        if isinstance(entry, dict) and str(entry.get("batch_id", "")) == batch_id]
+            targets = {record["target"] for record in records}
+            old_paths = {os.path.normcase(record["old_abs"]) for record in records}
+            sizes = {record["expected_size"] for record in records}
+            names = {record["object"].name for record in records}
+            if len(matching) != 1 or len(targets) != 1 or len(old_paths) != 1 or len(sizes) != 1:
+                rejected += len(records)
+                continue
+            entry = matching[0]
+            entry_source = str(entry.get("source_path", ""))
+            entry_abs = os.path.normpath(os.path.abspath(entry_source)) if entry_source else ""
+            if (os.path.normcase(entry_abs) not in old_paths
+                    or entry.get("source_size_bytes") != next(iter(sizes))
+                    or not isinstance(entry.get("objects"), list)):
+                rejected += len(records)
+                continue
+            history_names = {
+                item.get("name") for item in entry["objects"] if isinstance(item, dict)
+            }
+            if not names.issubset(history_names):
+                rejected += len(records)
+                continue
+            approved.extend(records)
+            batch_entry_by_id[batch_id] = entry
+
+        target_to_batches = {}
+        for batch_id, records in grouped.items():
+            for record in records:
+                target_to_batches.setdefault(os.path.normcase(record["target"]), set()).add(batch_id)
+        conflicting_targets = {path for path, batches in target_to_batches.items() if len(batches) > 1}
+        if conflicting_targets:
+            keep = []
+            conflicted_batches = set()
+            for batch_id, records in grouped.items():
+                if any(os.path.normcase(record["target"]) in conflicting_targets for record in records):
+                    conflicted_batches.add(batch_id)
+                    rejected += len(records)
+            approved = [record for record in approved
+                        if str(record["object"].get("rh_studio_import_batch_id", "")) not in conflicted_batches]
+            for batch_id in conflicted_batches:
+                batch_entry_by_id.pop(batch_id, None)
+
+        if not approved:
+            self.report({"WARNING"}, "没有可安全应用的修复。跳过 %d 条记录；对象和项目清单均未修改。" % rejected)
+            return {"CANCELLED"}
+
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+        updates_by_batch = {}
+        for record in approved:
+            batch_id = str(record["object"].get("rh_studio_import_batch_id", ""))
+            updates_by_batch.setdefault(batch_id, record)
+        for batch_id, record in updates_by_batch.items():
+            entry = batch_entry_by_id[batch_id]
+            stat = os.stat(record["target"])
+            entry["relinked_from"] = entry.get("source_path", "")
+            entry["source_path"] = record["target"]
+            entry["source_size_bytes"] = stat.st_size
+            entry["source_mtime"] = datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds")
+            entry["relinked_at"] = now
+            entry["recovery_method"] = "candidate_report_unique_exact_size"
+
+        temp_path = manifest_path + "." + uuid.uuid4().hex + ".tmp"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as stream:
+                json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.write("\\n")
+            os.replace(temp_path, manifest_path)
+        except (OSError, TypeError, ValueError) as exc:
+            self.report({"ERROR"}, "项目清单更新失败，未修改对象路径：" + str(exc))
+            return {"CANCELLED"}
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        for record in approved:
+            record["object"]["rh_studio_source_path"] = record["target"]
+            record["object"]["rh_studio_relinked_at"] = now
+        self.report({"INFO"}, "已修复 %d 个对象、同步 %d 个导入批次；跳过 %d 条待人工处理记录。只更新路径元数据，未重新导入几何。" %
+                    (len(approved), len(updates_by_batch), rejected))
+        return {"FINISHED"}
+
+
 class RH_OT_relink_asset_source(bpy.types.Operator):
     bl_idname = "rh_studio.relink_asset_source"
     bl_label = "重新关联原始资源文件"
@@ -3020,7 +3205,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
+    RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
