@@ -20,6 +20,7 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 - Apply starter poses (reset/T-pose, relaxed, arms-up, sitting, wave) and insert animation keyframes at the current timeline frame.
 - Apply basic expression presets by matching common English/Chinese names of shape keys already present on the active mesh.
 - Save/load named pose presets inside the current `.blend` scene, add body-facing presets (front, three-quarter, side, back), and run a lightweight limb-clearance warning check.
+- Save/load full keyed animation Actions as named reusable action sets inside the `.blend` file, and run basic action-sequence checks for missing actions, invalid frame ranges, single-frame clips, and the current frame being outside the action range.
 - Trigger existing body-reaction morph keys for effects such as bulging veins or tense muscles, when the imported model actually provides those shape keys.
 
 ## Use
