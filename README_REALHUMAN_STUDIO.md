@@ -16,7 +16,7 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 - Export selected objects to GLB, FBX, or OBJ, subject to exporter availability.
 - Switch between front, back, left, right, top, and bottom views.
 - Generate and assign a UV-based procedural fabric-print material with dot, stripe, or checker motifs; adjustable density, sparsity, rotation, base color, and print color.
-- Generate a simple stick-display humanoid armature proportioned from a selected mesh's bounding box, with optional Blender automatic weights.
+- Generate a simple stick-display humanoid armature proportioned from a selected mesh's bounding box, with optional Blender automatic weights. Its initial hip/knee/shoulder heights, shoulder width, and arm reach can now be adjusted in the generation dialog; these are coarse starting proportions, not anatomy-aware fitting.
 - Apply starter poses (reset/T-pose, relaxed, arms-up, sitting, wave) and insert animation keyframes at the current timeline frame.
 - Apply basic expression presets by matching common English/Chinese names of shape keys already present on the active mesh.
 - Save/load named pose presets inside the current `.blend` scene, add body-facing presets (front, three-quarter, side, back), and run a lightweight limb-clearance warning check.
