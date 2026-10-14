@@ -564,9 +564,12 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         entries = manifest["asset_sources"]
         grouped = {}
         rejected = 0
+        blocked_batches = set()
         for record in report["objects"]:
             if not isinstance(record, dict) or record.get("candidate_status") != "unique_exact_size_match":
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             batch_id = str(record.get("batch_id", ""))
             object_name = str(record.get("object_name", ""))
@@ -580,6 +583,8 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
                     or not isinstance(expected_size, int) or expected_size < 0
                     or len(exact_candidates) != 1 or len(candidates) != 1):
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             candidate = exact_candidates[0]
             target = os.path.normpath(os.path.abspath(str(candidate.get("path", ""))))
@@ -587,26 +592,36 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
             obj = bpy.data.objects.get(object_name)
             if obj is None or str(obj.get("rh_studio_import_batch_id", "")) != batch_id:
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             current_source = str(obj.get("rh_studio_source_path", ""))
             current_abs = os.path.normpath(os.path.abspath(bpy.path.abspath(current_source))) if current_source else ""
             if current_abs != old_abs or os.path.isfile(current_abs):
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             if (os.path.basename(target).casefold() != filename.casefold()
                     or Path(target).suffix.lower() != extension
                     or Path(filename).suffix.lower() != extension
                     or not os.path.isfile(target)):
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             try:
                 target_size = os.path.getsize(target)
             except OSError:
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             if (target_size != expected_size or candidate.get("size_bytes") != expected_size
                     or candidate.get("size_match") is not True):
                 rejected += 1
+                if record.get("batch_id"):
+                    blocked_batches.add(str(record.get("batch_id")))
                 continue
             grouped.setdefault(batch_id, []).append({
                 "object": obj, "old_path": current_source, "old_abs": old_abs,
@@ -618,6 +633,9 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         approved = []
         batch_entry_by_id = {}
         for batch_id, records in grouped.items():
+            if batch_id in blocked_batches:
+                rejected += len(records)
+                continue
             matching = [entry for entry in entries
                         if isinstance(entry, dict) and str(entry.get("batch_id", "")) == batch_id]
             targets = {record["target"] for record in records}
@@ -684,7 +702,7 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         try:
             with open(temp_path, "w", encoding="utf-8") as stream:
                 json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\\n")
+                stream.write("\n")
             os.replace(temp_path, manifest_path)
         except (OSError, TypeError, ValueError) as exc:
             self.report({"ERROR"}, "项目清单更新失败，未修改对象路径：" + str(exc))
