@@ -255,6 +255,31 @@ def run():
                and "non_manifold_edges" in audited["mesh"],
                "Asset audit omitted UV or topology diagnostics.")
 
+    # Asset audit should flag a missing original source and a broken armature modifier.
+    bpy.ops.mesh.primitive_cube_add(size=1.0)
+    broken_asset = bpy.context.object
+    broken_asset.name = "RH CI Broken Asset Links"
+    broken_asset["rh_studio_source_path"] = os.path.join(
+        tempfile.gettempdir(), "rh_studio_source_that_does_not_exist.fbx")
+    broken_asset["rh_studio_import_batch_id"] = "ci-broken-link-batch"
+    broken_asset.modifiers.new(name="Missing Rig Target", type="ARMATURE")
+    activate(broken_asset)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_broken_asset_audit_") as audit_tmp:
+        broken_audit_path = os.path.join(audit_tmp, "broken_asset_audit.json")
+        result = bpy.ops.rh_studio.audit_selected_assets(filepath=broken_audit_path)
+        ensure("FINISHED" in result, "Broken asset link audit failed.")
+        with open(broken_audit_path, "r", encoding="utf-8") as stream:
+            broken_payload = json.load(stream)
+        broken_record = broken_payload["objects"][0]
+        ensure(broken_record.get("source_path_exists") is False
+               and broken_record.get("import_batch_id") == "ci-broken-link-batch"
+               and any("原始资源文件不存在" in warning
+                       for warning in broken_record.get("warnings", []))
+               and any("没有目标骨架" in warning
+                       for warning in broken_record.get("warnings", [])),
+               "Asset audit missed a stale source path or an unassigned armature modifier.")
+    bpy.data.objects.remove(broken_asset, do_unlink=True)
+
     # Asset manifest export should include portable metadata and convert dimensions to meters.
     activate(garment)
     previous_manifest_scale = bpy.context.scene.unit_settings.scale_length
