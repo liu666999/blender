@@ -306,6 +306,92 @@ class RH_OT_audit_selected_assets(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_diagnose_asset_scale(bpy.types.Operator):
+    bl_idname = "rh_studio.diagnose_asset_scale"
+    bl_label = "诊断资源尺寸与单位"
+    bl_description = "Measure selected objects in world space and report plausible unit interpretations without changing the scene"
+    bl_options = {"REGISTER"}
+
+    filepath: StringProperty(
+        name="尺寸诊断报告", subtype="FILE_PATH",
+        default="//rh_studio_scale_diagnosis.json")
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_objects)
+
+    def invoke(self, context, event):
+        self.filepath = bpy.path.abspath("//rh_studio_scale_diagnosis.json")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        objects = list(context.selected_objects)
+        points = []
+        object_records = []
+        for obj in objects:
+            corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+            points.extend(corners)
+            object_records.append({
+                "name": obj.name,
+                "type": obj.type,
+                "dimensions_world": [round(float(v), 6) for v in obj.dimensions],
+                "scale": [round(float(v), 6) for v in obj.scale],
+            })
+        if not points:
+            self.report({"ERROR"}, "所选对象没有有效边界框。")
+            return {"CANCELLED"}
+
+        minimum = [min(float(p[i]) for p in points) for i in range(3)]
+        maximum = [max(float(p[i]) for p in points) for i in range(3)]
+        dimensions = [maximum[i] - minimum[i] for i in range(3)]
+        height = dimensions[2]
+        scene = context.scene
+        unit_scale = float(scene.unit_settings.scale) if scene.unit_settings else 1.0
+        # These are hypotheses only. Blender object coordinates have no guaranteed real-world unit.
+        candidates = []
+        for label, factor in (("按米解释", 1.0), ("按厘米解释", 0.01), ("按毫米解释", 0.001)):
+            estimated_m = height * factor * unit_scale
+            plausible = 1.35 <= estimated_m <= 2.25
+            candidates.append({
+                "interpretation": label,
+                "meters_per_coordinate_unit": factor,
+                "estimated_height_m": round(estimated_m, 6),
+                "plausible_adult_human_height": plausible,
+            })
+        payload = {
+            "schema": "realhuman_studio_scale_diagnosis_v1",
+            "warning": "Unit interpretations are heuristic only; no scale or object transform was changed.",
+            "object_count": len(objects),
+            "scene_unit_system": scene.unit_settings.system,
+            "scene_unit_scale": unit_scale,
+            "world_bounds": {
+                "min": [round(v, 6) for v in minimum],
+                "max": [round(v, 6) for v in maximum],
+                "dimensions": [round(v, 6) for v in dimensions],
+            },
+            "unit_hypotheses": candidates,
+            "objects": object_records,
+        }
+        path = bpy.path.abspath(self.filepath)
+        try:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, indent=2)
+        except (OSError, ValueError, TypeError) as exc:
+            self.report({"ERROR"}, "无法写入尺寸诊断报告：" + str(exc))
+            return {"CANCELLED"}
+
+        plausible_labels = [item["interpretation"] for item in candidates
+                            if item["plausible_adult_human_height"]]
+        hint = "；可能的人体尺寸解释：" + "、".join(plausible_labels) if plausible_labels else "；未发现明显符合成人身高的常见单位解释"
+        self.report({"INFO"}, "所选组世界尺寸 %.4f × %.4f × %.4f（场景单位）；报告已保存%s" %
+                    (dimensions[0], dimensions[1], dimensions[2], hint))
+        return {"FINISHED"}
+
+
 class RH_OT_normalize_selected_assets(bpy.types.Operator):
     bl_idname = "rh_studio.normalize_selected_assets"
     bl_label = "规范化所选资源位置"
@@ -2128,7 +2214,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_audit_selected_assets, RH_OT_normalize_selected_assets,
+    RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
