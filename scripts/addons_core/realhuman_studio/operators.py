@@ -520,9 +520,9 @@ class RH_OT_generate_simple_rig(bpy.types.Operator):
         hip_z = min_z + self.hip_height_ratio * h
         knee_z = min_z + self.knee_height_ratio * h
         shoulder_z = min_z + self.shoulder_height_ratio * h
-        chest_z = min_z + min(0.765, (self.shoulder_height_ratio + 0.805) * 0.5) * h
-        neck_z = min_z + 0.865 * h
-        head_z = min_z + 0.895 * h
+        chest_z = min_z + (self.shoulder_height_ratio - 0.04) * h
+        neck_z = min_z + min(0.96, self.shoulder_height_ratio + 0.06) * h
+        head_z = min_z + min(0.975, self.shoulder_height_ratio + 0.09) * h
         head_top = min_z + 0.985 * h
         ankle_z = min_z + 0.055 * h
         hip_half = max(0.055 * h, min(0.085 * h, (max_x - min_x) * 0.09))
