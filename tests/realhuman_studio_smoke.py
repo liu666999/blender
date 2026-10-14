@@ -335,6 +335,26 @@ def run():
     bpy.context.scene.unit_settings.system = previous_unit_system
     bpy.context.scene.unit_settings.scale_length = previous_scale_length
 
+    # Refuse to scale a bound mesh without its armature, and preserve transforms.
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.object.armature_add(location=(0.0, 0.0, 0.0))
+    bound_rig = bpy.context.object
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(2.0, 0.0, 1.0))
+    bound_mesh = bpy.context.object
+    armature_modifier = bound_mesh.modifiers.new(name="Armature", type="ARMATURE")
+    armature_modifier.object = bound_rig
+    mesh_matrix_before = bound_mesh.matrix_world.copy()
+    rig_matrix_before = bound_rig.matrix_world.copy()
+    activate(bound_mesh)
+    result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
+    ensure("CANCELLED" in result,
+           "Group calibration should refuse a bound mesh when its armature is not selected.")
+    ensure(all(abs(a - b) < 1e-6 for a, b in zip(mesh_matrix_before, bound_mesh.matrix_world))
+           and all(abs(a - b) < 1e-6 for a, b in zip(rig_matrix_before, bound_rig.matrix_world)),
+           "Rejected group calibration unexpectedly modified transforms.")
+    bpy.data.objects.remove(bound_mesh, do_unlink=True)
+    bpy.data.objects.remove(bound_rig, do_unlink=True)
+
     # Position normalization should center the selected group and place its bounds on Z=0
     # without applying transforms or mutating mesh coordinates.
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=(3.0, 4.0, 2.0))
