@@ -528,8 +528,9 @@ class RH_OT_generate_simple_rig(bpy.types.Operator):
         hip_half = max(0.055 * h, min(0.085 * h, (max_x - min_x) * 0.09))
         shoulder_half = self.shoulder_width_ratio * h
         hand_dist = self.arm_reach_ratio * h
-        elbow_dist = hand_dist * 0.58
-        wrist_dist = hand_dist * 0.93
+        arm_span = max(0.0, hand_dist - shoulder_half)
+        elbow_dist = shoulder_half + arm_span * 0.447
+        wrist_dist = shoulder_half + arm_span * 0.908
         foot_len = max(0.07 * h, (max_y - min_y) * 0.30)
 
         # Each tuple: head, tail, parent name, connected flag.
