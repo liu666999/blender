@@ -814,6 +814,8 @@ class RH_OT_insert_pose_keyframe(bpy.types.Operator):
     def execute(self, context):
         rig = context.active_object
         frame = context.scene.frame_current
+        animation_data = rig.animation_data
+        action_before = animation_data.action if animation_data else None
         inserted = 0
         for pose_bone in rig.pose.bones:
             if pose_bone.rotation_mode == "QUATERNION":
@@ -824,10 +826,16 @@ class RH_OT_insert_pose_keyframe(bpy.types.Operator):
                 rotation_path = "rotation_euler"
             pose_bone.keyframe_insert(data_path=rotation_path, frame=frame, group=pose_bone.name)
             pose_bone.keyframe_insert(data_path="location", frame=frame, group=pose_bone.name)
+            pose_bone.keyframe_insert(data_path="scale", frame=frame, group=pose_bone.name)
             inserted += 1
-        if rig.animation_data and rig.animation_data.action:
-            rig.animation_data.action.name = "RealHuman Motion"
-        self.report({"INFO"}, "已在第 %d 帧为 %d 根骨骼记录关键帧。" % (frame, inserted))
+
+        # Name only the Action created by this operation. Existing/imported/shared
+        # Actions keep their names and identity; inserting a key must not rename them.
+        animation_data = rig.animation_data
+        action_after = animation_data.action if animation_data else None
+        if action_before is None and action_after is not None:
+            action_after.name = "RealHuman Motion"
+        self.report({"INFO"}, "已在第 %d 帧为 %d 根骨骼记录位置、旋转和缩放关键帧。" % (frame, inserted))
         return {"FINISHED"}
 
 
