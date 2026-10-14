@@ -462,11 +462,15 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
                     bpy.path.abspath(source_path))),
                 "import_batch_id": obj.get("rh_studio_import_batch_id", ""),
                 "imported_at": obj.get("rh_studio_imported_at", ""),
-                "dimensions_world": dimensions,
-                "dimensions_world_m": (
-                    [round(value * unit_scale, 6) for value in dimensions]
-                    if valid_scale and all(math.isfinite(value) for value in dimensions)
-                    else None),
+                "dimensions_world": [
+                    value if math.isfinite(value) else None for value in dimensions
+                ],
+                "dimensions_world_m": [
+                    round(value * unit_scale, 6)
+                    if valid_scale and math.isfinite(value)
+                    and math.isfinite(value * unit_scale) else None
+                    for value in dimensions
+                ],
                 "armature_targets": sorted(set(targets)),
                 "mesh": mesh_data, "warnings": warnings,
             })
