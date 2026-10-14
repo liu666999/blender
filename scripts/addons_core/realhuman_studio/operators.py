@@ -299,7 +299,7 @@ class RH_OT_export_asset_manifest(bpy.types.Operator):
             os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
             with open(filepath, "w", encoding="utf-8") as stream:
                 json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\\n")
+                stream.write("\n")
         except (OSError, TypeError, ValueError) as exc:
             self.report({"ERROR"}, "写入资源清单失败：" + str(exc))
             return {"CANCELLED"}
