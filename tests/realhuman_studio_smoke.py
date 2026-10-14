@@ -59,6 +59,32 @@ def run():
 
     clean_scene()
 
+    # Build and update non-destructive body-proportion shape keys on an upright mesh.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(4.0, 0.0, 1.0))
+    proportion_mesh = bpy.context.object
+    proportion_mesh.name = "RH CI Proportion Mesh"
+    proportion_mesh.scale = (0.35, 0.22, 1.0)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    activate(proportion_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("FINISHED" in result, "Body proportion shape-key generation failed.")
+    proportion_keys = proportion_mesh.data.shape_keys.key_blocks
+    proportion_names = ("RH体型 | 肩宽", "RH体型 | 胸围", "RH体型 | 腰围", "RH体型 | 臀宽")
+    ensure(all(proportion_keys.get(name) is not None for name in proportion_names),
+           "One or more body proportion shape keys are missing.")
+    shoulder_key = proportion_keys["RH体型 | 肩宽"]
+    ensure(abs(shoulder_key.slider_min + 1.0) < 1e-6
+           and abs(shoulder_key.slider_max - 1.0) < 1e-6,
+           "Body proportion controls should support a -1 to +1 range.")
+    ensure(any((shoulder_key.data[i].co - proportion_keys[0].data[i].co).length > 1e-5
+               for i in range(len(proportion_mesh.data.vertices))),
+           "Generated shoulder key does not change any vertex coordinates.")
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("FINISHED" in result, "Updating body proportion shape keys failed.")
+    ensure(sum(1 for key in proportion_keys if key.name.startswith("RH体型 | ")) == 4,
+           "Updating body proportion keys created duplicate controls.")
+    bpy.data.objects.remove(proportion_mesh, do_unlink=True)
+
     # Exercise the same rig-generation operator the UI calls, but disable
     # automatic weights so this test is deterministic and mesh-topology agnostic.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.95))
