@@ -1117,9 +1117,12 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
             matched_bones = set()
             previous_frame = None
             for entry in frames:
-                if not isinstance(entry, dict) or not isinstance(entry.get("frame"), int):
+                if (not isinstance(entry, dict) or not isinstance(entry.get("frame"), int)
+                        or isinstance(entry.get("frame"), bool)):
                     raise ValueError("帧数据结构无效。")
                 frame = entry["frame"]
+                if abs(frame) > 1000000:
+                    raise ValueError("帧号超出安全范围。")
                 if previous_frame is not None and frame <= previous_frame:
                     raise ValueError("帧号必须严格递增。")
                 previous_frame = frame
@@ -1141,6 +1144,13 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
                         if not all(math.isfinite(value) for value in numbers):
                             raise ValueError("骨骼 %s 含有非有限数值。" % name)
                         clean[key] = numbers
+                    quaternion = clean["rotation_quaternion"]
+                    quaternion_length = math.sqrt(sum(value * value for value in quaternion))
+                    if quaternion_length <= 1e-12:
+                        raise ValueError("骨骼 %s 的四元数长度为零。" % name)
+                    clean["rotation_quaternion"] = [
+                        value / quaternion_length for value in quaternion
+                    ]
                     validated_bones[name] = clean
                     matched_bones.add(name)
                 validated.append((frame, validated_bones))
