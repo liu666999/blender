@@ -22,7 +22,7 @@
 | Body proportion shape keys | Implemented; smoke test added | Generates reusable shoulder-width, chest-depth/width, waist, and hip-width shape keys with -1..+1 sliders. Uses smooth vertical weighting on a single upright Z-up mesh; it is a first-stage generic deformation, not anatomy-aware sculpting or a guarantee of realistic results on every topology. |
 | Shape-key controls and reset | Implemented in source | Controls shape keys already present in the imported mesh. |
 | GLB, FBX and OBJ export | Implemented in source | Depends on the exporter operator being available in the build. |
-| Procedural fabric print | Implemented; shader construction smoke-tested | UV-based dots, stripes or checker pattern; not a library of real cloth textures. |
+| Procedural fabric print | Implemented; shader construction smoke-tested | Dots, stripes or checker pattern with UV, object-local or generated coordinates; X/Y placement and scale controls; in Edit Mode, assigns the material only to selected faces. This is regional material assignment, not a full texture-painting or garment-pattern system. |
 | Bounding-box-based simple humanoid rig | Implemented; rig-generation smoke-tested | Dialog exposes hip/knee/shoulder height ratios, shoulder half-width, and arm reach. These remain coarse initial estimates; final deformation quality is not certified by headless tests. |
 | Starter poses and keyframe insertion | Implemented; smoke-tested | Keys local location, the active rotation representation, and scale for every pose bone. Existing Actions retain their names; only a newly created Action is named `RealHuman Motion`. |
 | Selected-bone rotation editor | Implemented; headless smoke-tested | Sets local XYZ rotation on the active pose bone and can insert a rotation keyframe at the current frame; requires Pose Mode and an active bone selection. GUI discoverability and usability still need manual validation. |
@@ -40,7 +40,7 @@
 - No bundled production-ready human base mesh, realistic skin material/texture library, anatomy meshes, or complete asset catalog.
 - No complete procedural human generator, muscle/fat controls, or anatomical retopology. The new shoulder/chest/waist/hip shape keys are only a first-stage proportion tool.
 - No complete anatomy simulation: toggles organize imported assets but do not generate bones, muscles, nerves, vessels, or organs.
-- No robust garment pattern drafting, region painting, decal placement by 3D coordinates, or clothing simulation system. Current fabric print is a material helper.
+- No robust garment pattern drafting, brush-based region painting, decal placement with arbitrary surface projection, or clothing simulation system. Regional face selection and coordinate-based procedural print placement are now available as a limited first step.
 - No true 2D-to-3D inverse kinematics, joint-length solving, motion retargeting, contact-aware animation, or reliable mesh-collision solving.
 - No visual quality guarantee for automatic skin weights, facial expressions, anatomical alignment, or mesh deformation.
 - No standalone application shell, installer, Windows executable/package, custom scripting console, or full Python-like project execution environment beyond Blender's existing facilities.
@@ -54,7 +54,7 @@
 4. Test the 2D pose overlay from the sidebar in front, side, and perspective views; drag every endpoint, navigate with middle mouse/wheel, record multiple frames, and play the result back.
 5. Save, close, and reopen a .blend file; confirm named pose presets and action sets remain available.
 6. Test action-set name collisions with two rigs, confirm the existing shared Action remains assigned, and check frame playback after loading.
-7. Check shader appearance on meshes with and without UV maps and verify exports in a separate viewer.
+7. Check shader appearance for UV, object and generated coordinates on real garments; verify selected-face material assignment and exports in a separate viewer.
 8. Test asset importers/exporters individually in the exact Blender build intended for daily use.
 
 ## Test interpretation
