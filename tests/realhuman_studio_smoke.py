@@ -349,8 +349,12 @@ def run():
     result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
     ensure("CANCELLED" in result,
            "Group calibration should refuse a bound mesh when its armature is not selected.")
-    ensure(all(abs(a - b) < 1e-6 for a, b in zip(mesh_matrix_before, bound_mesh.matrix_world))
-           and all(abs(a - b) < 1e-6 for a, b in zip(rig_matrix_before, bound_rig.matrix_world)),
+    ensure(all(abs(a - b) < 1e-6
+                   for row_a, row_b in zip(mesh_matrix_before, bound_mesh.matrix_world)
+                   for a, b in zip(row_a, row_b))
+           and all(abs(a - b) < 1e-6
+                   for row_a, row_b in zip(rig_matrix_before, bound_rig.matrix_world)
+                   for a, b in zip(row_a, row_b)),
            "Rejected group calibration unexpectedly modified transforms.")
     bpy.data.objects.remove(bound_mesh, do_unlink=True)
     bpy.data.objects.remove(bound_rig, do_unlink=True)
