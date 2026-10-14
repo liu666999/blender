@@ -21,6 +21,7 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 - Apply basic expression presets by matching common English/Chinese names of shape keys already present on the active mesh.
 - Save/load named pose presets inside the current `.blend` scene, add body-facing presets (front, three-quarter, side, back), and run a lightweight limb-clearance warning check.
 - Save/load full keyed animation Actions as named reusable action sets inside the `.blend` file, and run basic action-sequence checks for missing actions, invalid frame ranges, single-frame clips, and the current frame being outside the action range.
+- Export/import sampled action clips as `realhuman_studio_action_v1` JSON. The format stores local bone location, quaternion rotation, and scale at each integer frame, matches bones by name, and rejects malformed/non-finite data or clips over 5000 frames. It is a sampled pose interchange format, not a lossless copy of Blender constraints, drivers, or NLA setup.
 - Trigger existing body-reaction morph keys for effects such as bulging veins or tense muscles, when the imported model actually provides those shape keys.
 
 ## Project audit
