@@ -12,6 +12,7 @@ import tempfile
 import traceback
 
 import bpy
+import bmesh
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts", "addons_core"))
 if ROOT not in sys.path:
