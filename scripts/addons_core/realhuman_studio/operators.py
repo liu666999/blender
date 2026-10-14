@@ -530,10 +530,50 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self, width=520)
 
     def draw(self, context):
-        self.layout.prop(self, "filepath")
-        self.layout.label(text="只处理唯一同名、扩展名一致且文件大小精确匹配的候选。", icon="INFO")
-        self.layout.label(text="应用前会再次核对当前对象、文件与项目导入历史。")
-        self.layout.label(text="有歧义或批次不一致的记录会跳过，不会强行修复。")
+        layout = self.layout
+        layout.prop(self, "filepath")
+        layout.label(text="只处理唯一同名、扩展名一致且文件大小精确匹配的候选。", icon="INFO")
+        layout.label(text="以下是候选报告预览；执行时仍会重新核验对象、文件和项目历史。")
+        layout.label(text="有歧义或批次不一致的记录会跳过，不会强行修复。")
+        try:
+            report_path = os.path.abspath(bpy.path.abspath(self.filepath))
+            with open(report_path, "r", encoding="utf-8") as stream:
+                preview = json.load(stream)
+            records = preview.get("objects", []) if isinstance(preview, dict) else []
+            if not isinstance(records, list):
+                raise ValueError("objects 不是数组")
+            counts = {}
+            for record in records:
+                status = str(record.get("candidate_status", "invalid_record")) if isinstance(record, dict) else "invalid_record"
+                counts[status] = counts.get(status, 0) + 1
+            box = layout.box()
+            box.label(text="报告统计：%d 条记录" % len(records), icon="PREVIEW_RANGE")
+            box.label(text="可进一步核验：%d    歧义：%d    需人工复核：%d    无候选：%d" % (
+                counts.get("unique_exact_size_match", 0),
+                counts.get("ambiguous_exact_size_matches", 0),
+                counts.get("filename_match_needs_review", 0),
+                counts.get("no_candidate", 0)))
+            if records:
+                listing = box.column(align=True)
+                listing.label(text="对象 / 状态 / 候选")
+                for record in records[:12]:
+                    if not isinstance(record, dict):
+                        listing.label(text="无效记录（将跳过）", icon="ERROR")
+                        continue
+                    name = str(record.get("object_name", "(未知对象)"))
+                    status = str(record.get("candidate_status", "invalid_record"))
+                    candidates = record.get("candidates", [])
+                    candidate_path = ""
+                    if isinstance(candidates, list) and len(candidates) == 1 and isinstance(candidates[0], dict):
+                        candidate_path = str(candidates[0].get("path", ""))
+                    label = "%s | %s" % (name[:28], status)
+                    if candidate_path:
+                        label += " | " + os.path.basename(candidate_path)[:24]
+                    listing.label(text=label, icon="CHECKMARK" if status == "unique_exact_size_match" else "INFO")
+                if len(records) > 12:
+                    listing.label(text="另有 %d 条记录，完整列表见 JSON 报告。" % (len(records) - 12))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            layout.label(text="暂时无法预览报告：" + str(exc)[:100], icon="ERROR")
 
     def execute(self, context):
         report_path = os.path.abspath(bpy.path.abspath(self.filepath))
