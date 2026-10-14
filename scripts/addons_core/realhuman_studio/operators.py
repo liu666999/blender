@@ -556,6 +556,28 @@ class RH_OT_fit_selected_group_height(bpy.types.Operator):
 
     def execute(self, context):
         objects = list(context.selected_objects)
+        selected_pointers = {obj.as_pointer() for obj in objects}
+        # Refuse partial scaling when a selected mesh is bound to an armature
+        # outside the selection. Silently scaling only one side of this pair
+        # is a common way to break a character after import.
+        missing_armatures = []
+        for obj in objects:
+            if obj.type != "MESH":
+                continue
+            for modifier in obj.modifiers:
+                target = modifier.object if modifier.type == "ARMATURE" else None
+                if target is not None and target.as_pointer() not in selected_pointers:
+                    missing_armatures.append((obj.name, target.name))
+            if obj.parent is not None and obj.parent.type == "ARMATURE" and obj.parent.as_pointer() not in selected_pointers:
+                missing_armatures.append((obj.name, obj.parent.name))
+        if missing_armatures:
+            details = ", ".join("%s → %s" % pair for pair in missing_armatures[:3])
+            self.report(
+                {"ERROR"},
+                "检测到未选中的绑定骨架，已取消以避免角色变形：%s。请同时选择网格和对应骨架。" % details
+            )
+            return {"CANCELLED"}
+
         scene = context.scene
         unit_settings = scene.unit_settings
         meters_per_blender_unit = float(unit_settings.scale_length) if unit_settings else 1.0
