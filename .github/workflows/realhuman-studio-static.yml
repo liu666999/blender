@@ -5,11 +5,13 @@ on:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
       - "tests/realhuman_studio_smoke.py"
+      - "source/blender/blenkernel/BKE_blender_version.h"
       - ".github/workflows/realhuman-studio-static.yml"
   pull_request:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
       - "tests/realhuman_studio_smoke.py"
+      - "source/blender/blenkernel/BKE_blender_version.h"
       - ".github/workflows/realhuman-studio-static.yml"
 
 jobs:
@@ -31,40 +33,113 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: python-syntax
-    strategy:
-      fail-fast: false
-      # Test against an LTS baseline and a newer runtime. The source branch
-      # is not tied to one Blender minor version; compatibility is established
-      # by the smoke-test matrix rather than assumptions.
-      matrix:
-        include:
-          - version: "4.5.3"
-            series: "4.5"
-          - version: "5.2.2"
-            series: "5.2"
     steps:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             scripts/addons_core/realhuman_studio
             tests
-      - name: Download Blender ${{ matrix.version }}
+            source/blender/blenkernel/BKE_blender_version.h
+      - name: Resolve Blender version from this source branch
+        id: blender
         shell: bash
         run: |
           set -euo pipefail
-          BLENDER_ARCHIVE="$RUNNER_TEMP/blender-${{ matrix.version }}-linux-x64.tar.xz"
-          curl --fail --location --retry 3 --retry-delay 2 \
-            "https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.version }}-linux-x64.tar.xz" \
-            --output "$BLENDER_ARCHIVE"
-          tar -xJf "$BLENDER_ARCHIVE" -C "$RUNNER_TEMP"
+          python3 - <<'PY'
+          import html
+          import os
+          import re
+          from html.parser import HTMLParser
+          from urllib.parse import unquote, urljoin, urlsplit
+          from urllib.request import Request, urlopen
+
+          header_path = "source/blender/blenkernel/BKE_blender_version.h"
+          with open(header_path, "r", encoding="utf-8") as source:
+              header = source.read()
+
+          def macro(name, default=None):
+              match = re.search(r"^#define\\s+" + re.escape(name) + r"\\s+([A-Za-z0-9_]+)", header, re.MULTILINE)
+              if not match:
+                  if default is not None:
+                      return default
+                  raise RuntimeError("Missing version macro: " + name)
+              return match.group(1)
+
+          encoded = int(macro("BLENDER_VERSION"))
+          patch = int(macro("BLENDER_VERSION_PATCH", "0"))
+          cycle = macro("BLENDER_VERSION_CYCLE", "release").lower()
+          major, minor = encoded // 100, encoded % 100
+          version = f"{major}.{minor}.{patch}"
+
+          page = "https://builder.blender.org/download/daily/"
+          request = Request(page, headers={"User-Agent": "RealHuman-Studio-CI"})
+          with urlopen(request, timeout=45) as response:
+              document = response.read().decode("utf-8", errors="replace")
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.hrefs = []
+              def handle_starttag(self, tag, attrs):
+                  if tag.lower() == "a":
+                      href = dict(attrs).get("href")
+                      if href:
+                          self.hrefs.append(href)
+
+          parser = Links()
+          parser.feed(document)
+          if cycle in {"alpha", "beta", "rc"}:
+              prefix = f"blender-{version}-{cycle}+main."
+              def matches(name):
+                  return name.startswith(prefix) and name.endswith("-linux.x86_64-release.tar.xz")
+          else:
+              expected = f"blender-{version}-linux.x86_64-release.tar.xz"
+              def matches(name):
+                  return name == expected
+
+          candidates = []
+          seen = set()
+          for href in parser.hrefs:
+              decoded = unquote(html.unescape(href))
+              filename = os.path.basename(urlsplit(decoded).path)
+              if matches(filename):
+                  url = urljoin(page, href)
+                  if url not in seen:
+                      seen.add(url)
+                      candidates.append(url)
+
+          if not candidates:
+              raise RuntimeError(
+                  f"No Linux x64 runtime found on the daily-build page for "
+                  f"the branch version {version} ({cycle})."
+              )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"version={version}\\n")
+              output.write(f"url={candidates[0]}\\n")
+              output.write(f"cycle={cycle}\\n")
+
+          print(f"Source branch version: {version} ({cycle})")
+          print(f"Runtime archive: {candidates[0]}")
+          PY
+      - name: Download branch-matched Blender runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/blender-branch-runtime.tar.xz"
+          curl --fail --location --retry 3 --retry-delay 2 "${{ steps.blender.outputs.url }}" --output "$ARCHIVE"
+          mkdir -p "$RUNNER_TEMP/blender-runtime"
+          tar -xJf "$ARCHIVE" --strip-components=1 -C "$RUNNER_TEMP/blender-runtime"
+          test -x "$RUNNER_TEMP/blender-runtime/blender"
       - name: Run add-on runtime smoke tests
         shell: bash
+        env:
+          RH_STUDIO_EXPECTED_BLENDER_VERSION: ${{ steps.blender.outputs.version }}
         run: |
           set -euo pipefail
           LOG_FILE="$RUNNER_TEMP/realhuman-studio-smoke.log"
           set +e
-          "$RUNNER_TEMP/blender-${{ matrix.version }}-linux-x64/blender" \
-            --background --factory-startup --python tests/realhuman_studio_smoke.py 2>&1 | tee "$LOG_FILE"
+          "$RUNNER_TEMP/blender-runtime/blender" --background --factory-startup --python tests/realhuman_studio_smoke.py 2>&1 | tee "$LOG_FILE"
           BLENDER_STATUS=${PIPESTATUS[0]}
           set -e
           if [ "$BLENDER_STATUS" -ne 0 ] || ! grep -q "^REALHUMAN_STUDIO_SMOKE_TEST: PASS$" "$LOG_FILE"; then
