@@ -453,11 +453,13 @@ class RH_OT_scan_missing_sources(bpy.types.Operator):
                         if isinstance(entry.get("source_size_bytes"), int):
                             matching_sizes.append(entry["source_size_bytes"])
                 expected_size = matching_sizes[0] if matching_sizes else None
-            for candidate in candidates:
-                candidate["size_match"] = (
+            ranked = [
+                dict(candidate, size_match=(
                     isinstance(expected_size, int) and candidate["size_bytes"] == expected_size
-                )
-            ranked = sorted(candidates, key=lambda candidate: (
+                ))
+                for candidate in candidates
+            ]
+            ranked.sort(key=lambda candidate: (
                 not candidate["size_match"], candidate["path"].casefold()
             ))
             exact = [candidate for candidate in ranked if candidate["size_match"]]
@@ -500,7 +502,7 @@ class RH_OT_scan_missing_sources(bpy.types.Operator):
             os.makedirs(os.path.dirname(report_path) or ".", exist_ok=True)
             with open(temp_path, "w", encoding="utf-8") as stream:
                 json.dump(report, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\\n")
+                stream.write("\n")
             os.replace(temp_path, report_path)
         except (OSError, TypeError, ValueError) as exc:
             self.report({"ERROR"}, "候选报告写入失败：" + str(exc))
