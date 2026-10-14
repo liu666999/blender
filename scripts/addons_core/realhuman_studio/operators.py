@@ -414,12 +414,13 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
                 counts["missing_import_batch_ids"] += 1
 
             dimensions = [float(value) for value in obj.dimensions]
-            if not all(math.isfinite(value) for value in dimensions):
+            has_geometry = obj.type in {"MESH", "ARMATURE", "CURVE", "SURFACE", "FONT", "META"}
+            if has_geometry and not all(math.isfinite(value) for value in dimensions):
                 warnings.append("对象尺寸包含非有限数值")
                 counts["suspicious_dimensions"] += 1
-            elif valid_scale:
+            elif has_geometry and valid_scale:
                 largest_m = max(dimensions) * unit_scale
-                if largest_m < 0.005 or largest_m > 20.0:
+                if not math.isfinite(largest_m) or largest_m < 0.005 or largest_m > 20.0:
                     warnings.append("尺寸超出 5 毫米至 20 米的启发式检查范围")
                     counts["suspicious_dimensions"] += 1
 
