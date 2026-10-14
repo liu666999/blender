@@ -278,6 +278,35 @@ def run():
                and any("没有目标骨架" in warning
                        for warning in broken_record.get("warnings", [])),
                "Asset audit missed a stale source path or an unassigned armature modifier.")
+
+        # The project-wide report should aggregate all objects and cross-check
+        # the persistent import history, not only inspect the current selection.
+        previous_project_root = bpy.context.scene.rh_studio_project_root
+        bpy.context.scene.rh_studio_project_root = audit_tmp
+        with open(os.path.join(audit_tmp, "realhuman_project.json"), "w",
+                  encoding="utf-8") as stream:
+            json.dump({
+                "application": "RealHuman Studio",
+                "asset_sources": [{
+                    "batch_id": "ci-missing-source-history",
+                    "source_path": os.path.join(audit_tmp, "deleted_original.fbx"),
+                    "objects": [{"name": "RH CI Deleted Imported Object"}],
+                }],
+            }, stream)
+        project_audit_path = os.path.join(audit_tmp, "project_integrity.json")
+        result = bpy.ops.rh_studio.audit_project_assets(filepath=project_audit_path)
+        ensure("FINISHED" in result and os.path.isfile(project_audit_path),
+               "Project-wide asset audit failed.")
+        with open(project_audit_path, "r", encoding="utf-8") as stream:
+            project_audit = json.load(stream)
+        ensure(project_audit.get("schema") == "realhuman_studio_project_integrity_v1"
+               and project_audit.get("summary", {}).get("missing_source_files", 0) >= 1
+               and project_audit.get("summary", {}).get("missing_armature_targets", 0) >= 1
+               and any("源文件不存在" in warning
+                       for warning in project_audit.get("project_history", {}).get("warnings", []))
+               and project_audit.get("object_count", 0) >= 1,
+               "Project audit missed broken links or project history inconsistencies.")
+        bpy.context.scene.rh_studio_project_root = previous_project_root
     bpy.data.objects.remove(broken_asset, do_unlink=True)
 
     # Asset manifest export should include portable metadata and convert dimensions to meters.
