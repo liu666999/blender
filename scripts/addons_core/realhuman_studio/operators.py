@@ -910,7 +910,7 @@ _ACTION_SET_PREFIX = "RH动作集 | "
 # and every string ever handed to Blender at module scope; returning a local
 # list can leave dangling string pointers during redraw/property conversion.
 _ACTION_SET_ENUM_ITEMS = []
-_ACTION_SET_ENUM_STRING_CACHE = []
+_ACTION_SET_ENUM_STRING_CACHE = set()
 
 
 def _action_set_items(_self, _context):
@@ -921,11 +921,11 @@ def _action_set_items(_self, _context):
             label = action.name[len(_ACTION_SET_PREFIX):]
             identifier = str(action.name)
             description = "已保存的整套关键帧动作"
-            _ACTION_SET_ENUM_STRING_CACHE.extend((identifier, label, description))
+            _ACTION_SET_ENUM_STRING_CACHE.update((identifier, label, description))
             items.append((identifier, label, description))
     if not items:
         placeholder = ("", "暂无已保存动作集", "先为骨架记录至少一个关键帧，再保存动作集")
-        _ACTION_SET_ENUM_STRING_CACHE.extend(placeholder)
+        _ACTION_SET_ENUM_STRING_CACHE.update(placeholder)
         items.append(placeholder)
     _ACTION_SET_ENUM_ITEMS = items
     return _ACTION_SET_ENUM_ITEMS
