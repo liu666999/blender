@@ -9,7 +9,7 @@ import bpy
 import bmesh
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Quaternion, Vector
 from . import CATEGORY_ITEMS
 
 ROOT_COLLECTION = "RealHuman Studio"
@@ -541,6 +541,100 @@ class RH_OT_fit_height(bpy.types.Operator):
             "当前网格已校准至约 %.3f 米并落地；仅修改活动网格，不会同步缩放骨架或衣物。" % actual_height_m
         )
         return {"FINISHED"}
+
+class RH_OT_fit_selected_group_height(bpy.types.Operator):
+    bl_idname = "rh_studio.fit_selected_group_height"
+    bl_label = "校准所选资源组身高"
+    bl_description = "Uniformly scale all selected objects as one world-space group and place the group's bottom at Z=0"
+    bl_options = {"REGISTER", "UNDO"}
+
+    target_height: FloatProperty(name="目标身高（米）", default=1.75, min=0.1, max=3.0)
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_objects)
+
+    def execute(self, context):
+        objects = list(context.selected_objects)
+        scene = context.scene
+        unit_settings = scene.unit_settings
+        meters_per_blender_unit = float(unit_settings.scale_length) if unit_settings else 1.0
+        if not math.isfinite(meters_per_blender_unit) or meters_per_blender_unit <= 0.0:
+            self.report({"ERROR"}, "场景单位比例无效，未修改所选资源。")
+            return {"CANCELLED"}
+
+        corners = []
+        original_matrices = {}
+        for obj in objects:
+            try:
+                object_corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+            except (AttributeError, TypeError, ValueError):
+                object_corners = []
+            if object_corners:
+                corners.extend(object_corners)
+                original_matrices[obj.name] = obj.matrix_world.copy()
+        if not corners:
+            self.report({"ERROR"}, "所选对象没有有效边界框，未修改资源。")
+            return {"CANCELLED"}
+
+        minimum = Vector((
+            min(point.x for point in corners),
+            min(point.y for point in corners),
+            min(point.z for point in corners),
+        ))
+        maximum = Vector((
+            max(point.x for point in corners),
+            max(point.y for point in corners),
+            max(point.z for point in corners),
+        ))
+        current_height = maximum.z - minimum.z
+        if not math.isfinite(current_height) or current_height <= 1e-8:
+            self.report({"ERROR"}, "所选资源组高度为零或无效，未修改资源。")
+            return {"CANCELLED"}
+
+        target_height_bu = float(self.target_height) / meters_per_blender_unit
+        factor = target_height_bu / current_height
+        if not math.isfinite(factor) or factor <= 0.0:
+            self.report({"ERROR"}, "计算出的缩放比例无效，未修改资源。")
+            return {"CANCELLED"}
+
+        # Scale around the group's horizontal center and bottom in world space.
+        # Apply parent objects before selected descendants so their final world
+        # matrices remain consistent with the same group transform.
+        pivot = Vector(((minimum.x + maximum.x) * 0.5,
+                        (minimum.y + maximum.y) * 0.5, minimum.z))
+        scale = Matrix.Diagonal((factor, factor, factor, 1.0))
+        transform = Matrix.Translation(pivot) @ scale @ Matrix.Translation(-pivot)
+
+        def parent_depth(obj):
+            depth, parent = 0, obj.parent
+            while parent is not None:
+                depth += 1
+                parent = parent.parent
+            return depth
+
+        for obj in sorted(objects, key=parent_depth):
+            original = original_matrices.get(obj.name)
+            if original is not None:
+                obj.matrix_world = transform @ original
+        context.view_layer.update()
+
+        final_corners = [
+            obj.matrix_world @ Vector(corner)
+            for obj in objects for corner in obj.bound_box
+        ]
+        final_height_m = (
+            max(point.z for point in final_corners) -
+            min(point.z for point in final_corners)
+        ) * meters_per_blender_unit
+        final_bottom_m = min(point.z for point in final_corners) * meters_per_blender_unit
+        self.report(
+            {"INFO"},
+            "已校准所选 %d 个对象组成的资源组：高度 %.3f 米，底部 Z=%.4f 米。请确认骨架、身体网格和衣物均已选中。" %
+            (len(objects), final_height_m, final_bottom_m)
+        )
+        return {"FINISHED"}
+
 
 class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
     bl_idname = "rh_studio.generate_body_proportion_keys"
@@ -2237,7 +2331,7 @@ CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
