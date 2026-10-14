@@ -24,7 +24,7 @@
 | Procedural fabric print | Implemented; shader construction smoke-tested | UV-based dots, stripes or checker pattern; not a library of real cloth textures. |
 | Bounding-box-based simple humanoid rig | Implemented; rig-generation smoke-tested | Dialog exposes hip/knee/shoulder height ratios, shoulder half-width, and arm reach. These remain coarse initial estimates; final deformation quality is not certified by headless tests. |
 | Starter poses and keyframe insertion | Implemented; smoke-tested | Uses Blender armature pose channels and the current timeline frame. |
-| Named single-pose presets | Implemented; smoke-tested | Stored in the current scene as JSON custom data. |
+| Selected-bone rotation editor | Implemented in source; headless smoke-tested | Sets local XYZ rotation on the active pose bone and can insert a rotation keyframe at the current frame; requires Pose Mode and an active bone selection. GUI discoverability and usability still need manual validation. |\n| Named single-pose presets | Implemented; smoke-tested | Stored in the current scene as JSON custom data. |
 | Named full-action sets | Implemented in source; smoke test added | Duplicates an animation Action in the current .blend file. When a same-named saved Action is still used by another object, the save path now creates a numbered copy rather than deleting that shared Action. |
 | Basic action-sequence checks | Implemented in source; smoke test added | Checks Action existence, frame range, one-frame clips and current-frame range; it does not judge animation quality. |
 | Action JSON import/export | Implemented in source; smoke-tested | Samples local bone transforms per integer frame; converts the active local rotation matrix so Euler-animated bones are not exported with stale quaternion values; rejects unsupported rotation encodings on import; validates optional source-FPS metadata and warns on a mismatch without silently changing scene FPS. Not a lossless serialization of constraints, drivers, or NLA. 
@@ -47,7 +47,7 @@
 ## Known risks and manual validation checklist
 
 1. Run the latest GitHub Actions workflow and confirm the Blender runtime smoke test reaches its explicit PASS marker.
-2. In the actual GUI, register the add-on and check that the RealHuman sidebar draws without errors.
+2. In the actual GUI, register the add-on and check that the RealHuman sidebar draws without errors; enter Pose Mode, select a bone, adjust local XYZ rotation, and test optional keyframing.
 3. Generate a rig from a representative human mesh; inspect bone positions, parenting, roll, and any automatic-weight deformation.
 4. Test the 2D pose overlay from the sidebar in front, side, and perspective views; drag every endpoint, navigate with middle mouse/wheel, record multiple frames, and play the result back.
 5. Save, close, and reopen a .blend file; confirm named pose presets and action sets remain available.
