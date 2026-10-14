@@ -255,6 +255,29 @@ def run():
                and "non_manifold_edges" in audited["mesh"],
                "Asset audit omitted UV or topology diagnostics.")
 
+    # Asset manifest export should include portable metadata and convert dimensions to meters.
+    activate(garment)
+    previous_manifest_scale = bpy.context.scene.unit_settings.scale_length
+    bpy.context.scene.unit_settings.scale_length = 0.01
+    with tempfile.TemporaryDirectory(prefix="rh_studio_asset_manifest_") as manifest_tmp:
+        manifest_path = os.path.join(manifest_tmp, "asset_manifest.json")
+        result = bpy.ops.rh_studio.export_asset_manifest(filepath=manifest_path)
+        ensure("FINISHED" in result and os.path.isfile(manifest_path),
+               "Asset manifest export did not write its JSON file.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest_payload = json.load(stream)
+        ensure(manifest_payload.get("schema") == "realhuman_studio_asset_manifest_v1"
+               and manifest_payload.get("object_count") == 1
+               and abs(manifest_payload.get("meters_per_blender_unit", 0.0) - 0.01) < 1e-9,
+               "Asset manifest schema, count, or unit scale is incorrect.")
+        manifest_object = manifest_payload["objects"][0]
+        ensure(manifest_object.get("name") == garment.name
+               and manifest_object.get("mesh", {}).get("vertices") == len(garment.data.vertices)
+               and manifest_object.get("world_bounds") is not None
+               and len(manifest_object.get("dimensions_world_m", [])) == 3,
+               "Asset manifest omitted mesh statistics or metric world bounds.")
+    bpy.context.scene.unit_settings.scale_length = previous_manifest_scale
+
     # Scale diagnosis should report world dimensions and unit hypotheses without mutating transforms.
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=(1.0, 2.0, 3.0))
     scale_cube = bpy.context.object
