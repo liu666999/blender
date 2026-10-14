@@ -720,6 +720,7 @@ class RH_OT_adjust_active_bone(bpy.types.Operator):
     bl_description = "Set the active pose bone's local XYZ rotation in degrees and optionally key it"
     bl_options = {"REGISTER", "UNDO"}
 
+    bone_name: StringProperty(name="目标骨骼", default="")
     rotation_x: FloatProperty(name="X 旋转（度）", subtype="ANGLE",
                               default=0.0, min=math.radians(-360.0), max=math.radians(360.0), precision=2)
     rotation_y: FloatProperty(name="Y 旋转（度）", subtype="ANGLE",
@@ -731,10 +732,19 @@ class RH_OT_adjust_active_bone(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return bool(context.active_object and context.active_object.type == "ARMATURE"
-                    and context.active_pose_bone is not None)
+                    and len(context.active_object.pose.bones) > 0)
+
+    def _target_bone(self, context):
+        rig = context.active_object
+        name = self.bone_name or (context.active_pose_bone.name if context.active_pose_bone else "")
+        return rig.pose.bones.get(name) if rig and rig.type == "ARMATURE" and name else None
 
     def invoke(self, context, event):
-        bone = context.active_pose_bone
+        bone = self._target_bone(context)
+        if bone is None:
+            self.report({"ERROR"}, "请先选择一根目标骨骼。")
+            return {"CANCELLED"}
+        self.bone_name = bone.name
         try:
             euler = bone.matrix_basis.to_euler("XYZ")
             self.rotation_x, self.rotation_y, self.rotation_z = euler
@@ -744,16 +754,16 @@ class RH_OT_adjust_active_bone(bpy.types.Operator):
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="骨骼：%s（局部 XYZ 旋转）" % context.active_pose_bone.name)
+        layout.label(text="骨骼：%s（局部 XYZ 旋转）" % (self.bone_name or "未指定"))
         layout.prop(self, "rotation_x")
         layout.prop(self, "rotation_y")
         layout.prop(self, "rotation_z")
         layout.prop(self, "insert_keyframe")
 
     def execute(self, context):
-        bone = context.active_pose_bone
+        bone = self._target_bone(context)
         if bone is None:
-            self.report({"ERROR"}, "请在姿势模式中选择一根骨骼。")
+            self.report({"ERROR"}, "目标骨骼不存在，请重新选择骨架和骨骼。")
             return {"CANCELLED"}
         bone.rotation_mode = "XYZ"
         bone.rotation_euler = (self.rotation_x, self.rotation_y, self.rotation_z)
