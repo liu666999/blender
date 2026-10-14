@@ -369,6 +369,151 @@ class RH_OT_export_asset_manifest(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_scan_missing_sources(bpy.types.Operator):
+    bl_idname = "rh_studio.scan_missing_sources"
+    bl_label = "扫描缺失资源并预览候选"
+    bl_description = "Find same-name source files under a chosen folder and write a candidate report without changing assets"
+    bl_options = {"REGISTER"}
+
+    directory: StringProperty(name="搜索目录", subtype="DIR_PATH")
+    filepath: StringProperty(name="候选报告", subtype="FILE_PATH", default="//logs/missing_source_candidates.json")
+    filter_glob: StringProperty(default="*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+
+    def invoke(self, context, event):
+        root = bpy.path.abspath(context.scene.rh_studio_project_root or "//")
+        self.directory = root if os.path.isdir(root) else bpy.path.abspath("//")
+        self.filepath = os.path.join(root, "logs", "missing_source_candidates.json") if os.path.isdir(root) else bpy.path.abspath("//missing_source_candidates.json")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        search_root = os.path.abspath(bpy.path.abspath(self.directory))
+        if not os.path.isdir(search_root):
+            self.report({"ERROR"}, "搜索目录不存在。")
+            return {"CANCELLED"}
+
+        history_by_batch = {}
+        project_root = os.path.abspath(bpy.path.abspath(context.scene.rh_studio_project_root or "//"))
+        manifest_path = os.path.join(project_root, "realhuman_project.json")
+        manifest_warning = None
+        if os.path.isfile(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as stream:
+                    manifest = json.load(stream)
+                if not isinstance(manifest, dict) or not isinstance(manifest.get("asset_sources", []), list):
+                    raise ValueError("项目清单结构不正确")
+                history_by_batch = {
+                    str(entry.get("batch_id", "")): entry
+                    for entry in manifest.get("asset_sources", [])
+                    if isinstance(entry, dict) and entry.get("batch_id")
+                }
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                manifest_warning = "项目导入历史读取失败：" + str(exc)
+        else:
+            manifest_warning = "未找到 realhuman_project.json；候选匹配无法使用历史文件大小校验"
+
+        index = {}
+        scan_errors = []
+        for current_root, dirs, files in os.walk(search_root):
+            dirs[:] = sorted(d for d in dirs if d not in {".git", "__pycache__", ".svn"})
+            for filename in files:
+                extension = Path(filename).suffix.lower()
+                if extension not in SUPPORTED_IMPORTS:
+                    continue
+                full_path = os.path.normpath(os.path.abspath(os.path.join(current_root, filename)))
+                try:
+                    stat = os.stat(full_path)
+                except OSError as exc:
+                    scan_errors.append({"path": full_path, "error": str(exc)})
+                    continue
+                key = (filename.casefold(), extension)
+                index.setdefault(key, []).append({
+                    "path": full_path, "size_bytes": stat.st_size,
+                    "mtime": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
+                })
+
+        missing_objects = []
+        for obj in list(bpy.data.objects):
+            old_path = str(obj.get("rh_studio_source_path", ""))
+            if not old_path:
+                continue
+            resolved_old = os.path.abspath(bpy.path.abspath(old_path))
+            if os.path.isfile(resolved_old):
+                continue
+            filename = os.path.basename(old_path)
+            extension = Path(filename).suffix.lower()
+            candidates = index.get((filename.casefold(), extension), [])
+            batch_id = str(obj.get("rh_studio_import_batch_id", ""))
+            history = history_by_batch.get(batch_id, {})
+            expected_size = history.get("source_size_bytes")
+            if expected_size is None:
+                matching_sizes = []
+                for entry in history_by_batch.values():
+                    if os.path.normcase(os.path.abspath(str(entry.get("source_path", "")))) == os.path.normcase(resolved_old):
+                        if isinstance(entry.get("source_size_bytes"), int):
+                            matching_sizes.append(entry["source_size_bytes"])
+                expected_size = matching_sizes[0] if matching_sizes else None
+            for candidate in candidates:
+                candidate["size_match"] = (
+                    isinstance(expected_size, int) and candidate["size_bytes"] == expected_size
+                )
+            ranked = sorted(candidates, key=lambda candidate: (
+                not candidate["size_match"], candidate["path"].casefold()
+            ))
+            exact = [candidate for candidate in ranked if candidate["size_match"]]
+            status = "unique_exact_size_match" if len(exact) == 1 else (
+                "ambiguous_exact_size_matches" if len(exact) > 1 else (
+                    "filename_match_needs_review" if ranked else "no_candidate"
+                )
+            )
+            missing_objects.append({
+                "object_name": obj.name, "object_type": obj.type,
+                "category": str(obj.get("rh_studio_category", "")),
+                "batch_id": batch_id, "missing_source_path": old_path,
+                "filename": filename, "extension": extension,
+                "expected_size_bytes": expected_size,
+                "candidate_status": status, "candidate_count": len(ranked),
+                "candidates": ranked[:20],
+                "warning": "候选仅供人工核对；本次扫描不会修改对象或项目清单"
+            })
+
+        report = {
+            "schema": "realhuman_studio_missing_source_candidates_v1",
+            "search_root": search_root,
+            "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "summary": {
+                "missing_source_objects": len(missing_objects),
+                "unique_exact_size_matches": sum(1 for item in missing_objects if item["candidate_status"] == "unique_exact_size_match"),
+                "ambiguous_exact_size_matches": sum(1 for item in missing_objects if item["candidate_status"] == "ambiguous_exact_size_matches"),
+                "filename_matches_needing_review": sum(1 for item in missing_objects if item["candidate_status"] == "filename_match_needs_review"),
+                "no_candidates": sum(1 for item in missing_objects if item["candidate_status"] == "no_candidate"),
+                "scan_errors": len(scan_errors),
+            },
+            "manifest_warning": manifest_warning,
+            "objects": missing_objects,
+            "scan_errors": scan_errors[:200],
+            "safety_note": "This is a preview only. Same filename is not proof of identical content; even size-matched candidates require user verification before relinking."
+        }
+        report_path = os.path.abspath(bpy.path.abspath(self.filepath))
+        temp_path = report_path + "." + uuid.uuid4().hex + ".tmp"
+        try:
+            os.makedirs(os.path.dirname(report_path) or ".", exist_ok=True)
+            with open(temp_path, "w", encoding="utf-8") as stream:
+                json.dump(report, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.write("\\n")
+            os.replace(temp_path, report_path)
+        except (OSError, TypeError, ValueError) as exc:
+            self.report({"ERROR"}, "候选报告写入失败：" + str(exc))
+            return {"CANCELLED"}
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        self.report({"INFO"}, "扫描完成：%d 个缺失路径，%d 个唯一同名且大小匹配候选。未修改任何资源。报告：%s" % (
+            len(missing_objects), report["summary"]["unique_exact_size_matches"], report_path))
+        return {"FINISHED"}
+
+
 class RH_OT_relink_asset_source(bpy.types.Operator):
     bl_idname = "rh_studio.relink_asset_source"
     bl_label = "重新关联原始资源文件"
@@ -2873,7 +3018,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_export_asset_manifest, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
+    RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
