@@ -153,8 +153,15 @@ def run():
                "Project manifest content is unexpected.")
 
         # Verify the portable action JSON round-trip against a second rig.
-        json_path = os.path.join(tmp, "ci_motion.json")
+        # This bone uses Euler keys intentionally: export must serialize the
+        # effective local rotation, not a stale rotation_quaternion property.
         activate(rig)
+        euler_bone = rig.pose.bones["forearm.R"]
+        euler_bone.rotation_mode = "XYZ"
+        euler_bone.rotation_euler = (0.2, 0.4, 0.6)
+        euler_bone.keyframe_insert(
+            data_path="rotation_euler", frame=bpy.context.scene.frame_current)
+        json_path = os.path.join(tmp, "ci_motion.json")
         ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=json_path),
                "Action JSON export failed.")
         ensure(os.path.isfile(json_path), "Action JSON file was not created.")
@@ -163,6 +170,10 @@ def run():
         ensure(action_payload.get("format") == "realhuman_studio_action_v1"
                and len(action_payload.get("frames", [])) >= 2,
                "Exported action JSON is missing its format marker or frame samples.")
+        exported_quaternion = action_payload["frames"][-1]["bones"]["forearm.R"]["rotation_quaternion"]
+        ensure(abs(exported_quaternion[0] - 1.0) > 0.01
+               or any(abs(component) > 0.05 for component in exported_quaternion[1:]),
+               "Euler-animated bone rotation was not converted to the exported quaternion.")
         activate(rig_copy)
         ensure("FINISHED" in bpy.ops.rh_studio.import_action_json(filepath=json_path),
                "Action JSON import failed.")
