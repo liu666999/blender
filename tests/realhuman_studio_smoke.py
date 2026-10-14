@@ -93,15 +93,11 @@ def run():
     # Exercise direct selected-bone rotation editing and optional keyframing.
     activate(rig)
     bpy.ops.object.mode_set(mode="POSE")
-    active_data_bone = rig.data.bones["forearm.R"]
-    # In current Blender builds, the active bone is the stable API entry point;
-    # Bone.select is not exposed consistently across versions.
-    rig.data.bones.active = active_data_bone
-    ensure(bpy.context.active_pose_bone is not None
-           and bpy.context.active_pose_bone.name == "forearm.R",
-           "Could not select the target pose bone for direct editing.")
+    # Pass the target bone explicitly; Blender's bone-selection API differs
+    # between releases, while the operator must remain testable headlessly.
     result = bpy.ops.rh_studio.adjust_active_bone(
-        rotation_x=0.2, rotation_y=0.1, rotation_z=-0.15, insert_keyframe=True)
+        bone_name="forearm.R", rotation_x=0.2, rotation_y=0.1,
+        rotation_z=-0.15, insert_keyframe=True)
     ensure("FINISHED" in result, "Direct selected-bone rotation adjustment failed.")
     edited_bone = rig.pose.bones["forearm.R"]
     ensure(edited_bone.rotation_mode == "XYZ"
