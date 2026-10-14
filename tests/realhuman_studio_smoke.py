@@ -302,6 +302,39 @@ def run():
     bpy.context.scene.unit_settings.system = previous_unit_system
     bpy.context.scene.unit_settings.scale_length = previous_scale_length
 
+    # Group calibration scales multiple selected objects together in world space.
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0.0, 0.0, 0.0))
+    group_body = bpy.context.object
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0.0, 0.0, 3.0))
+    group_clothing = bpy.context.object
+    group_body.select_set(True)
+    group_clothing.select_set(True)
+    bpy.context.view_layer.objects.active = group_body
+    previous_unit_system = bpy.context.scene.unit_settings.system
+    previous_scale_length = bpy.context.scene.unit_settings.scale_length
+    bpy.context.scene.unit_settings.system = "METRIC"
+    bpy.context.scene.unit_settings.scale_length = 0.01
+    result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
+    ensure("FINISHED" in result, "Selected-group height calibration failed.")
+    bpy.context.view_layer.update()
+    group_corners = [
+        obj.matrix_world @ Vector(corner)
+        for obj in (group_body, group_clothing) for corner in obj.bound_box
+    ]
+    group_height_m = (max(p.z for p in group_corners) - min(p.z for p in group_corners)) * 0.01
+    group_bottom_m = min(p.z for p in group_corners) * 0.01
+    ensure(abs(group_height_m - 1.75) < 1e-4,
+           "Selected-group calibration did not achieve target height.")
+    ensure(abs(group_bottom_m) < 1e-4,
+           "Selected-group calibration did not place group bottom at world Z=0.")
+    ensure(group_body.dimensions.z > 0.0 and group_clothing.dimensions.z > 0.0,
+           "Selected-group calibration damaged object dimensions.")
+    bpy.data.objects.remove(group_body, do_unlink=True)
+    bpy.data.objects.remove(group_clothing, do_unlink=True)
+    bpy.context.scene.unit_settings.system = previous_unit_system
+    bpy.context.scene.unit_settings.scale_length = previous_scale_length
+
     # Position normalization should center the selected group and place its bounds on Z=0
     # without applying transforms or mutating mesh coordinates.
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=(3.0, 4.0, 2.0))
