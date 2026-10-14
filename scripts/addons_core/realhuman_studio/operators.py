@@ -873,6 +873,30 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def load_repair_results_report(filepath):
+    """Load and validate a repair-results JSON report, raising a useful exception on errors."""
+    with open(filepath, "r", encoding="utf-8") as stream:
+        report = json.load(stream)
+    if not isinstance(report, dict) or report.get("schema") != "realhuman_studio_missing_source_repair_results_v1":
+        raise ValueError("结果报告格式不受支持。")
+    if not isinstance(report.get("results"), list):
+        raise ValueError("结果列表格式错误。")
+    if not isinstance(report.get("summary", {}), dict):
+        raise ValueError("统计摘要格式错误。")
+    return report
+
+
+def filter_repair_results(records, filter_status="ALL"):
+    """Pure helper shared by the viewer and smoke tests."""
+    if not isinstance(records, list):
+        return []
+    return [
+        item for item in records
+        if isinstance(item, dict)
+        and (filter_status == "ALL" or item.get("status") == filter_status)
+    ]
+
+
 class RH_OT_copy_repair_result_path(bpy.types.Operator):
     bl_idname = "rh_studio.copy_repair_result_path"
     bl_label = "复制资源路径"
@@ -916,11 +940,7 @@ class RH_OT_view_missing_source_repair_results(bpy.types.Operator):
         layout.prop(self, "filepath")
         layout.prop(self, "filter_status", text="筛选")
         try:
-            with open(os.path.abspath(bpy.path.abspath(self.filepath)), "r", encoding="utf-8") as stream:
-                report = json.load(stream)
-            if not isinstance(report, dict) or report.get("schema") != "realhuman_studio_missing_source_repair_results_v1":
-                layout.label(text="结果报告格式不受支持。", icon="ERROR")
-                return
+            report = load_repair_results_report(os.path.abspath(bpy.path.abspath(self.filepath)))
             summary = report.get("summary", {})
             row = layout.row(align=True)
             row.label(text="总计：%s" % summary.get("total", 0), icon="PREVIEW_RANGE")
@@ -928,11 +948,7 @@ class RH_OT_view_missing_source_repair_results(bpy.types.Operator):
             row.label(text="已跳过：%s" % summary.get("skipped", 0), icon="INFO")
             row.label(text="失败：%s" % summary.get("failed", 0), icon="ERROR")
             records = report.get("results", [])
-            if not isinstance(records, list):
-                layout.label(text="结果列表格式错误。", icon="ERROR")
-                return
-            filtered = [item for item in records if isinstance(item, dict)
-                        and (self.filter_status == "ALL" or item.get("status") == self.filter_status)]
+            filtered = filter_repair_results(records, self.filter_status)
             layout.label(text="当前显示 %d 条记录（最多展示前 30 条）。" % min(len(filtered), 30))
             if not filtered:
                 layout.label(text="没有符合筛选条件的记录。", icon="INFO")
