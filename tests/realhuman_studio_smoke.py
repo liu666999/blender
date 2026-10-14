@@ -169,6 +169,18 @@ def run():
         ensure(rig_copy.animation_data.action is not None
                and rig_copy.animation_data.action.name.startswith("RH导入动作 | "),
                "Imported JSON did not create and assign a named action.")
+        # A different source FPS must warn, not silently retime or mutate the scene.
+        mismatched_json_path = os.path.join(tmp, "mismatched_fps_action.json")
+        mismatched_payload = dict(action_payload)
+        scene_fps_before = bpy.context.scene.render.fps / max(bpy.context.scene.render.fps_base, 1e-8)
+        mismatched_payload["fps"] = scene_fps_before * 2.0
+        with open(mismatched_json_path, "w", encoding="utf-8") as stream:
+            json.dump(mismatched_payload, stream)
+        ensure("FINISHED" in bpy.ops.rh_studio.import_action_json(filepath=mismatched_json_path),
+               "Action JSON with a different source FPS should still import.")
+        scene_fps_after = bpy.context.scene.render.fps / max(bpy.context.scene.render.fps_base, 1e-8)
+        ensure(abs(scene_fps_after - scene_fps_before) < 1e-6,
+               "Importing an action must not silently change the scene FPS.")
         imported_action = rig_copy.animation_data.action
         invalid_json_path = os.path.join(tmp, "invalid_action.json")
         with open(invalid_json_path, "w", encoding="utf-8") as stream:
