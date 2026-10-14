@@ -395,17 +395,44 @@ class RH_OT_audit_selected_assets(bpy.types.Operator):
             self.report({"WARNING"}, "请先选择要检查的对象。")
             return {"CANCELLED"}
 
+        scene = context.scene
+        unit_scale = float(scene.unit_settings.scale_length or 1.0)
+        valid_unit_scale = math.isfinite(unit_scale) and unit_scale > 0.0
         report_objects = []
         for obj in objects:
+            source_path = obj.get("rh_studio_source_path", "")
+            dimensions = [float(v) for v in obj.dimensions]
+            dimensions_m = ([round(value * unit_scale, 6) for value in dimensions]
+                            if valid_unit_scale else None)
+            warnings = []
             record = {
                 "name": obj.name,
                 "type": obj.type,
                 "category": obj.get("rh_studio_category", "UNASSIGNED"),
-                "source_path": obj.get("rh_studio_source_path", ""),
-                "dimensions_world": [round(float(v), 6) for v in obj.dimensions],
+                "source_path": source_path,
+                "source_path_exists": bool(source_path and os.path.isfile(source_path)),
+                "import_batch_id": obj.get("rh_studio_import_batch_id", ""),
+                "imported_at": obj.get("rh_studio_imported_at", ""),
+                "dimensions_world": [round(value, 6) for value in dimensions],
+                "dimensions_world_m": dimensions_m,
+                "meters_per_blender_unit": unit_scale if valid_unit_scale else None,
                 "world_bounds": None,
-                "warnings": [],
+                "warnings": warnings,
             }
+            if source_path and not os.path.isfile(source_path):
+                warnings.append("原始资源文件不存在或路径已失效。")
+            if any(not math.isfinite(value) for value in dimensions):
+                warnings.append("对象尺寸包含非有限数值。")
+            elif any(value <= 1e-6 for value in dimensions):
+                warnings.append("对象至少有一个近零尺寸轴；请检查网格或对象变换。")
+            if valid_unit_scale and dimensions_m:
+                largest_dimension_m = max(dimensions_m)
+                if largest_dimension_m > 20.0 or largest_dimension_m < 0.005:
+                    warnings.append(
+                        "包围尺寸超出 5 毫米至 20 米的常规检查范围；"
+                        "请确认源文件单位与资源用途（启发式提示，不代表模型必然错误）。")
+            if not valid_unit_scale:
+                warnings.append("场景单位比例无效，无法可靠计算米制尺寸。")
             if obj.bound_box:
                 corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
                 record["world_bounds"] = {
@@ -428,6 +455,9 @@ class RH_OT_audit_selected_assets(bpy.types.Operator):
                     modifier.object.name for modifier in obj.modifiers
                     if modifier.type == "ARMATURE" and modifier.object
                 ]
+                if any(modifier.type == "ARMATURE" and modifier.object is None
+                       for modifier in obj.modifiers):
+                    warnings.append("存在没有目标骨架的骨架修改器。")
                 bm = bmesh.new()
                 try:
                     bm.from_mesh(mesh)
