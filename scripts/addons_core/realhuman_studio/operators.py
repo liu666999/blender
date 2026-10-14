@@ -1085,7 +1085,10 @@ class RH_OT_export_action_json(bpy.types.Operator, ExportHelper):
                 for bone in rig.pose.bones:
                     bones[bone.name] = {
                         "location": [float(v) for v in bone.location],
-                        "rotation_quaternion": [float(v) for v in bone.rotation_quaternion],
+                        # matrix_basis reflects the active rotation mode (Euler,
+                        # axis-angle, or quaternion); rotation_quaternion can be stale
+                        # when the bone is animated in a different mode.
+                        "rotation_quaternion": [float(v) for v in bone.matrix_basis.to_quaternion()],
                         "scale": [float(v) for v in bone.scale],
                     }
                 frames.append({"frame": frame, "bones": bones})
