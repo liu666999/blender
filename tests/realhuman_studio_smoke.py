@@ -255,6 +255,30 @@ def run():
                and "non_manifold_edges" in audited["mesh"],
                "Asset audit omitted UV or topology diagnostics.")
 
+    # Scale diagnosis should report world dimensions and unit hypotheses without mutating transforms.
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(1.0, 2.0, 3.0))
+    scale_cube = bpy.context.object
+    scale_location_before = tuple(scale_cube.location)
+    scale_scale_before = tuple(scale_cube.scale)
+    activate(scale_cube)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_scale_diagnosis_") as scale_tmp:
+        scale_report_path = os.path.join(scale_tmp, "scale_diagnosis.json")
+        result = bpy.ops.rh_studio.diagnose_asset_scale(filepath=scale_report_path)
+        ensure("FINISHED" in result and os.path.isfile(scale_report_path),
+               "Scale diagnosis did not write its JSON report.")
+        with open(scale_report_path, "r", encoding="utf-8") as stream:
+            scale_payload = json.load(stream)
+        ensure(scale_payload.get("schema") == "realhuman_studio_scale_diagnosis_v1"
+               and scale_payload.get("object_count") == 1,
+               "Scale diagnosis report schema or object count is incorrect.")
+        ensure(scale_payload["world_bounds"]["dimensions"] == [2.0, 2.0, 2.0]
+               and len(scale_payload["unit_hypotheses"]) == 3,
+               "Scale diagnosis returned incorrect bounds or missing unit hypotheses.")
+        ensure(tuple(scale_cube.location) == scale_location_before
+               and tuple(scale_cube.scale) == scale_scale_before,
+               "Scale diagnosis unexpectedly modified object transforms.")
+    bpy.data.objects.remove(scale_cube, do_unlink=True)
+
     # Position normalization should center the selected group and place its bounds on Z=0
     # without applying transforms or mutating mesh coordinates.
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=(3.0, 4.0, 2.0))
