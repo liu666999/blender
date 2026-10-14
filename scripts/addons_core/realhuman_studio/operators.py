@@ -873,6 +873,105 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_copy_repair_result_path(bpy.types.Operator):
+    bl_idname = "rh_studio.copy_repair_result_path"
+    bl_label = "复制资源路径"
+    bl_description = "Copy a source or candidate path to the system clipboard"
+
+    path: StringProperty(name="路径", default="")
+
+    def execute(self, context):
+        if not self.path:
+            self.report({"WARNING"}, "路径为空，无法复制。")
+            return {"CANCELLED"}
+        context.window_manager.clipboard = self.path
+        self.report({"INFO"}, "路径已复制到剪贴板。")
+        return {"FINISHED"}
+
+
+class RH_OT_view_missing_source_repair_results(bpy.types.Operator):
+    bl_idname = "rh_studio.view_missing_source_repair_results"
+    bl_label = "查看缺失资源修复结果"
+    bl_description = "Review per-item repair results and copy source/candidate paths"
+
+    filepath: StringProperty(name="结果报告", subtype="FILE_PATH", default="//logs/missing_source_repair_results.json")
+    filter_status: EnumProperty(
+        name="筛选状态",
+        items=(
+            ("ALL", "全部", "显示所有结果"),
+            ("repaired", "已修复", "只显示成功修复的记录"),
+            ("skipped", "已跳过", "只显示被安全规则跳过的记录"),
+            ("failed", "失败", "只显示执行失败的记录"),
+        ),
+        default="ALL",
+    )
+
+    def invoke(self, context, event):
+        root = os.path.abspath(bpy.path.abspath(context.scene.rh_studio_project_root or "//"))
+        self.filepath = os.path.join(root, "logs", "missing_source_repair_results.json")
+        return context.window_manager.invoke_props_dialog(self, width=760)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "filepath")
+        layout.prop(self, "filter_status", text="筛选")
+        try:
+            with open(os.path.abspath(bpy.path.abspath(self.filepath)), "r", encoding="utf-8") as stream:
+                report = json.load(stream)
+            if not isinstance(report, dict) or report.get("schema") != "realhuman_studio_missing_source_repair_results_v1":
+                layout.label(text="结果报告格式不受支持。", icon="ERROR")
+                return
+            summary = report.get("summary", {})
+            row = layout.row(align=True)
+            row.label(text="总计：%s" % summary.get("total", 0), icon="PREVIEW_RANGE")
+            row.label(text="已修复：%s" % summary.get("repaired", 0), icon="CHECKMARK")
+            row.label(text="已跳过：%s" % summary.get("skipped", 0), icon="INFO")
+            row.label(text="失败：%s" % summary.get("failed", 0), icon="ERROR")
+            records = report.get("results", [])
+            if not isinstance(records, list):
+                layout.label(text="结果列表格式错误。", icon="ERROR")
+                return
+            filtered = [item for item in records if isinstance(item, dict)
+                        and (self.filter_status == "ALL" or item.get("status") == self.filter_status)]
+            layout.label(text="当前显示 %d 条记录（最多展示前 30 条）。" % min(len(filtered), 30))
+            if not filtered:
+                layout.label(text="没有符合筛选条件的记录。", icon="INFO")
+                return
+            listing = layout.column(align=True)
+            for item in filtered[:30]:
+                status = item.get("status", "unknown")
+                icon = {"repaired": "CHECKMARK", "skipped": "INFO", "failed": "ERROR"}.get(status, "QUESTION")
+                box = listing.box()
+                header = box.row(align=True)
+                header.label(text=str(item.get("object_name") or "(未知对象)")[:48], icon=icon)
+                header.label(text=str(status))
+                reason = str(item.get("reason") or "未提供原因")
+                box.label(text="原因：" + reason[:180])
+                old_path = str(item.get("old_source_path") or "")
+                candidate_path = str(item.get("candidate_path") or "")
+                if old_path:
+                    row = box.row(align=True)
+                    row.label(text="原路径：" + old_path[:82])
+                    copy_old = row.operator("rh_studio.copy_repair_result_path", text="复制原路径", icon="COPYDOWN")
+                    copy_old.path = old_path
+                if candidate_path:
+                    row = box.row(align=True)
+                    row.label(text="候选：" + candidate_path[:82])
+                    copy_candidate = row.operator("rh_studio.copy_repair_result_path", text="复制候选", icon="COPYDOWN")
+                    copy_candidate.path = candidate_path
+                sizes = box.row(align=True)
+                sizes.label(text="预期大小：%s" % item.get("expected_size_bytes", "未知"))
+                sizes.label(text="实际大小：%s" % item.get("actual_size_bytes", "未知"))
+            if len(filtered) > 30:
+                layout.label(text="还有 %d 条记录未显示，请查看 JSON 完整报告。" % (len(filtered) - 30))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            layout.label(text="无法读取结果报告：" + str(exc)[:160], icon="ERROR")
+
+    def execute(self, context):
+        self.report({"INFO"}, "结果报告查看器已关闭。")
+        return {"FINISHED"}
+
+
 class RH_OT_relink_asset_source(bpy.types.Operator):
     bl_idname = "rh_studio.relink_asset_source"
     bl_label = "重新关联原始资源文件"
@@ -3377,7 +3476,8 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
+    RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
+    RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
