@@ -306,6 +306,59 @@ class RH_OT_audit_selected_assets(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_normalize_selected_assets(bpy.types.Operator):
+    bl_idname = "rh_studio.normalize_selected_assets"
+    bl_label = "规范化所选资源位置"
+    bl_description = "Center the selected asset group on X/Y and/or place its lowest point on Z=0 without changing mesh data"
+    bl_options = {"REGISTER", "UNDO"}
+
+    center_xy: BoolProperty(name="水平居中到原点", default=True)
+    floor_to_zero: BoolProperty(name="底部对齐地面", default=True)
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_objects)
+
+    def execute(self, context):
+        objects = list(context.selected_objects)
+        points = []
+        for obj in objects:
+            try:
+                corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+            except (AttributeError, TypeError, ValueError):
+                corners = []
+            points.extend(corners)
+
+        if not points:
+            self.report({"ERROR"}, "所选对象没有可用于定位的边界框。")
+            return {"CANCELLED"}
+
+        min_xyz = [min(point[i] for point in points) for i in range(3)]
+        max_xyz = [max(point[i] for point in points) for i in range(3)]
+        delta = Vector((
+            -(min_xyz[0] + max_xyz[0]) * 0.5 if self.center_xy else 0.0,
+            -(min_xyz[1] + max_xyz[1]) * 0.5 if self.center_xy else 0.0,
+            -min_xyz[2] if self.floor_to_zero else 0.0,
+        ))
+        if delta.length_squared > 1e-16:
+            # Translate in world space while preserving mesh data and relative spacing.
+            for obj in objects:
+                world_matrix = obj.matrix_world.copy()
+                world_matrix.translation += delta
+                obj.matrix_world = world_matrix
+
+        for obj in objects:
+            obj["rh_studio_position_normalized"] = True
+            obj["rh_studio_normalization_offset"] = [round(float(v), 6) for v in delta]
+        context.view_layer.update()
+        self.report(
+            {"INFO"},
+            "已规范化 %d 个对象的位置（偏移 %.4f, %.4f, %.4f）；未改动网格数据或物体缩放。" %
+            (len(objects), delta.x, delta.y, delta.z)
+        )
+        return {"FINISHED"}
+
+
 class RH_OT_assign_category(bpy.types.Operator):
     bl_idname = "rh_studio.assign_category"
     bl_label = "归入分类"
