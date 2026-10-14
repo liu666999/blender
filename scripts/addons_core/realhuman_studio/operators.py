@@ -945,17 +945,30 @@ class RH_OT_save_action_set(bpy.types.Operator):
             return {"CANCELLED"}
         full_name = _ACTION_SET_PREFIX + label
         existing = bpy.data.actions.get(full_name)
-        if existing is not None:
-            # Replace only the saved library copy, never the action currently
-            # being edited on the rig.
-            if existing == source:
-                self.report({"ERROR"}, "当前正在编辑的动作就是同名动作集；请先改名或复制动画。")
-                return {"CANCELLED"}
+        if existing == source:
+            self.report({"ERROR"}, "当前正在编辑的动作就是同名动作集；请先改名或复制动画。")
+            return {"CANCELLED"}
+
+        # Never delete an existing Action that may still drive another rig.
+        # If the name is already in use, preserve that Action and create a
+        # numbered library entry instead of silently breaking other objects.
+        target_name = full_name
+        if existing is not None and existing.users > 0:
+            suffix = 2
+            while bpy.data.actions.get("%s (%d)" % (full_name, suffix)) is not None:
+                suffix += 1
+            target_name = "%s (%d)" % (full_name, suffix)
+        elif existing is not None:
             bpy.data.actions.remove(existing)
+
         saved = source.copy()
-        saved.name = full_name
+        saved.name = target_name
         saved.use_fake_user = True
-        self.report({"INFO"}, "已保存整套动作“%s”（关键帧随 .blend 文件保存）。" % label)
+        if target_name != full_name:
+            self.report({"WARNING"}, "同名动作集仍被其他对象使用，已安全另存为“%s”。" %
+                        target_name[len(_ACTION_SET_PREFIX):])
+        else:
+            self.report({"INFO"}, "已保存整套动作“%s”（关键帧随 .blend 文件保存）。" % label)
         return {"FINISHED"}
 
 
