@@ -83,6 +83,12 @@ def run():
                  "hand.L", "hand.R", "thigh.L", "thigh.R", "shin.L", "shin.R",
                  "foot.L", "foot.R"):
         ensure(rig.pose.bones.get(name) is not None, "Missing bone: " + name)
+    shoulder_head = rig.data.bones["upper_arm.R"].head_local
+    hand_tail = rig.data.bones["hand.R"].tail_local
+    ensure(abs(shoulder_head.z - (0.05 + 0.82 * 1.8)) < 0.02,
+           "Custom shoulder-height ratio was not applied.")
+    ensure(abs(hand_tail.x - 0.52 * 1.8) < 0.03,
+           "Custom arm-reach ratio was not applied.")
 
     ensure("FINISHED" in bpy.ops.rh_studio.apply_pose_preset(preset="ARMS_UP"),
            "Apply pose preset failed.")
