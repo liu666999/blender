@@ -94,9 +94,8 @@ def run():
     activate(rig)
     bpy.ops.object.mode_set(mode="POSE")
     active_data_bone = rig.data.bones["forearm.R"]
-    for data_bone in rig.data.bones:
-        data_bone.select = False
-    active_data_bone.select = True
+    # In current Blender builds, the active bone is the stable API entry point;
+    # Bone.select is not exposed consistently across versions.
     rig.data.bones.active = active_data_bone
     ensure(bpy.context.active_pose_bone is not None
            and bpy.context.active_pose_bone.name == "forearm.R",
