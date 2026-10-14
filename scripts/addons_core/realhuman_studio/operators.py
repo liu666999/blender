@@ -4,7 +4,9 @@
 import json
 import math
 import os
+from datetime import datetime
 from pathlib import Path
+import uuid
 import bpy
 import bmesh
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
@@ -55,6 +57,54 @@ def move_objects_to_category(objects, scene, category, source_path=""):
         if source_path:
             obj["rh_studio_source_path"] = os.path.normpath(source_path)
     return target
+
+def record_project_import(scene, filepath, category, objects, batch_id, imported_at):
+    """Append one successful import batch to an existing project manifest.
+
+    A missing project manifest is not an error: per-object metadata is still
+    stored in the .blend file by the caller. Existing malformed manifests are
+    left untouched rather than overwritten.
+    """
+    project_root = bpy.path.abspath(scene.rh_studio_project_root or "//")
+    manifest_path = os.path.join(project_root, "realhuman_project.json")
+    if not os.path.isfile(manifest_path):
+        return False, "项目清单不存在，已只保存到当前 .blend 文件"
+
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        if not isinstance(manifest, dict):
+            raise ValueError("项目清单根节点必须是 JSON 对象")
+        asset_sources = manifest.setdefault("asset_sources", [])
+        if not isinstance(asset_sources, list):
+            raise ValueError("asset_sources 必须是 JSON 数组")
+
+        source = os.path.normpath(os.path.abspath(filepath))
+        source_stat = os.stat(source)
+        entry = {
+            "batch_id": batch_id,
+            "imported_at": imported_at,
+            "source_path": source,
+            "source_size_bytes": source_stat.st_size,
+            "source_mtime": datetime.fromtimestamp(
+                source_stat.st_mtime).astimezone().isoformat(timespec="seconds"),
+            "category": category,
+            "object_count": len(objects),
+            "objects": [{"name": obj.name, "type": obj.type} for obj in objects],
+        }
+        asset_sources.append(entry)
+        temp_path = manifest_path + "." + batch_id + ".tmp"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as stream:
+                json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.write("\\n")
+            os.replace(temp_path, manifest_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return False, "项目导入历史写入失败：" + str(exc)
+    return True, manifest_path
 
 def _call_import_operator(filepath):
     extension = Path(filepath).suffix.lower()
@@ -166,6 +216,13 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                 self.report({"WARNING"}, "导入器完成了操作，但没有产生新对象。")
                 return {"CANCELLED"}
             move_objects_to_category(imported, context.scene, self.category, filepath)
+            batch_id = uuid.uuid4().hex
+            imported_at = datetime.now().astimezone().isoformat(timespec="seconds")
+            for obj in imported:
+                obj["rh_studio_import_batch_id"] = batch_id
+                obj["rh_studio_imported_at"] = imported_at
+            history_saved, history_message = record_project_import(
+                context.scene, filepath, self.category, imported, batch_id, imported_at)
             for obj in list(context.selected_objects):
                 obj.select_set(False)
             for obj in imported:
@@ -181,8 +238,10 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
         except Exception as exc:
             self.report({"ERROR"}, "导入失败：" + str(exc))
             return {"CANCELLED"}
-        self.report({"INFO"}, "已导入 %d 个对象到「%s」。" %
-                    (len(imported), CATEGORY_COLLECTIONS[self.category]))
+        self.report({"INFO"}, "已导入 %d 个对象到「%s」。批次：%s" %
+                    (len(imported), CATEGORY_COLLECTIONS[self.category], batch_id[:8]))
+        if not history_saved:
+            self.report({"WARNING"}, history_message)
         return {"FINISHED"}
 
 class RH_OT_export_asset_manifest(bpy.types.Operator):
