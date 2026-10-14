@@ -216,6 +216,18 @@ def run():
         ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
                "Non-finite FPS metadata should be rejected without replacing the current action.")
 
+        invalid_rotation_path = os.path.join(tmp, "invalid_rotation_action.json")
+        invalid_rotation_payload = dict(action_payload)
+        invalid_rotation_payload["rotation_representation"] = "euler_degrees"
+        with open(invalid_rotation_path, "w", encoding="utf-8") as stream:
+            json.dump(invalid_rotation_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_rotation_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Unsupported rotation representations should be rejected without replacing the current action.")
+
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties were not unregistered.")
