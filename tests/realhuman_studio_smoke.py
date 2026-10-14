@@ -201,6 +201,37 @@ def run():
     ensure(garment.data.materials and garment.data.materials[0].use_nodes,
            "Fabric material wasn't assigned.")
 
+    # Verify object-coordinate mapping and face-region-only material assignment.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.5, 0.0, 1.0))
+    region_mesh = bpy.context.object
+    region_mesh.name = "RH CI Regional Print Mesh"
+    region_mesh.data.materials.append(bpy.data.materials.new("RH CI Base Fabric"))
+    activate(region_mesh)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bm = bmesh.from_edit_mesh(region_mesh.data)
+    for face in bm.faces:
+        face.select_set(False)
+    top_faces = [face for face in bm.faces if face.normal.z > 0.9]
+    ensure(len(top_faces) == 1, "Test cube should have exactly one top face.")
+    top_faces[0].select_set(True)
+    bmesh.update_edit_mesh(region_mesh.data)
+    result = bpy.ops.rh_studio.create_fabric_print(
+        pattern="STRIPES", coordinate_source="OBJECT",
+        offset_x=0.25, offset_y=-0.1, scale_x=1.5, scale_y=0.75)
+    ensure("FINISHED" in result, "Regional fabric print assignment failed.")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    region_material = region_mesh.data.materials[-1]
+    ensure(region_material.get("rh_studio_coordinate_source") == "OBJECT",
+           "Fabric coordinate source metadata was not stored.")
+    ensure(abs(region_material.get("rh_studio_offset_x", 0.0) - 0.25) < 1e-6
+           and abs(region_material.get("rh_studio_scale_y", 0.0) - 0.75) < 1e-6,
+           "Fabric placement controls were not stored.")
+    assigned_faces = [poly for poly in region_mesh.data.polygons
+                      if poly.material_index == len(region_mesh.data.materials) - 1]
+    ensure(len(assigned_faces) == 1 and assigned_faces[0].normal.z > 0.9,
+           "Regional print should affect only the selected face.")
+    bpy.data.objects.remove(region_mesh, do_unlink=True)
+
     # Validate the project folder scaffolding and manifest in a temporary folder.
     with tempfile.TemporaryDirectory(prefix="rh_studio_ci_") as tmp:
         result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
