@@ -42,6 +42,7 @@ class RH_PT_main(bpy.types.Panel):
         assets.operator("rh_studio.audit_project_assets", icon="VIEWZOOM", text="检查整个项目资源与导入历史")
         assets.operator("rh_studio.scan_missing_sources", icon="FILEBROWSER", text="扫描缺失资源并预览候选")
         assets.operator("rh_studio.apply_missing_source_repairs", icon="FILE_REFRESH", text="应用安全候选修复（需确认）")
+        assets.operator("rh_studio.view_missing_source_repair_results", icon="TEXT", text="查看修复结果 / 复制路径")
         assets.operator("rh_studio.relink_asset_source", icon="FILE_REFRESH", text="重新关联所选资源的原始文件")
         assets.operator("rh_studio.export_asset_manifest", icon="EXPORT", text="导出资源清单（米制 / 绑定 / 网格）")
         assets.operator("rh_studio.diagnose_asset_scale", icon="DRIVER_DISTANCE", text="诊断尺寸 / 可能单位（不修改模型）")
