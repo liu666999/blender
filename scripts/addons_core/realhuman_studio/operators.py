@@ -1027,6 +1027,167 @@ class RH_OT_load_action_set(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_export_action_json(bpy.types.Operator, ExportHelper):
+    bl_idname = "rh_studio.export_action_json"
+    bl_label = "导出动作 JSON"
+    bl_description = "Export the active armature action as portable sampled local bone transforms"
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE" and obj.animation_data
+                    and obj.animation_data.action)
+
+    def execute(self, context):
+        rig = context.active_object
+        action = rig.animation_data.action
+        start, end = action.frame_range
+        first, last = math.floor(start), math.ceil(end)
+        if last < first or last - first > 5000:
+            self.report({"ERROR"}, "动作帧范围无效或超过 5000 帧；请先裁剪动作。")
+            return {"CANCELLED"}
+        scene = context.scene
+        original_frame = scene.frame_current
+        frames = []
+        try:
+            for frame in range(first, last + 1):
+                scene.frame_set(frame)
+                context.view_layer.update()
+                bones = {}
+                for bone in rig.pose.bones:
+                    bones[bone.name] = {
+                        "location": [float(v) for v in bone.location],
+                        "rotation_quaternion": [float(v) for v in bone.rotation_quaternion],
+                        "scale": [float(v) for v in bone.scale],
+                    }
+                frames.append({"frame": frame, "bones": bones})
+            payload = {
+                "format": "realhuman_studio_action_v1",
+                "name": action.name,
+                "source_rig": rig.name,
+                "fps": scene.render.fps / max(scene.render.fps_base, 1e-8),
+                "frame_start": first,
+                "frame_end": last,
+                "rotation_representation": "local_quaternion",
+                "frames": frames,
+            }
+            filepath = os.path.abspath(bpy.path.abspath(self.filepath))
+            if Path(filepath).suffix.lower() != ".json":
+                filepath = str(Path(filepath).with_suffix(".json"))
+            with open(filepath, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+        except Exception as exc:
+            self.report({"ERROR"}, "导出动作 JSON 失败：" + str(exc))
+            return {"CANCELLED"}
+        finally:
+            scene.frame_set(original_frame)
+            context.view_layer.update()
+        self.report({"INFO"}, "已导出 %d 帧、%d 根骨骼的动作 JSON。" %
+                    (len(frames), len(rig.pose.bones)))
+        return {"FINISHED"}
+
+
+class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
+    bl_idname = "rh_studio.import_action_json"
+    bl_label = "导入动作 JSON"
+    bl_description = "Import a RealHuman Studio sampled action onto matching bones of the active armature"
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE" and len(obj.pose.bones) > 0)
+
+    def execute(self, context):
+        rig = context.active_object
+        filepath = os.path.abspath(bpy.path.abspath(self.filepath))
+        try:
+            with open(filepath, "r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+            if not isinstance(payload, dict) or payload.get("format") != "realhuman_studio_action_v1":
+                raise ValueError("文件格式不属于 RealHuman Studio action_v1。")
+            frames = payload.get("frames")
+            if not isinstance(frames, list) or not frames or len(frames) > 5001:
+                raise ValueError("动作帧数据为空或超过 5001 个采样点。")
+            validated = []
+            available_bones = {bone.name for bone in rig.pose.bones}
+            matched_bones = set()
+            previous_frame = None
+            for entry in frames:
+                if not isinstance(entry, dict) or not isinstance(entry.get("frame"), int):
+                    raise ValueError("帧数据结构无效。")
+                frame = entry["frame"]
+                if previous_frame is not None and frame <= previous_frame:
+                    raise ValueError("帧号必须严格递增。")
+                previous_frame = frame
+                bone_data = entry.get("bones")
+                if not isinstance(bone_data, dict):
+                    raise ValueError("骨骼数据结构无效。")
+                validated_bones = {}
+                for name, values in bone_data.items():
+                    if name not in available_bones:
+                        continue
+                    if not isinstance(values, dict):
+                        raise ValueError("骨骼 %s 的数据无效。" % name)
+                    clean = {}
+                    for key, length in (("location", 3), ("rotation_quaternion", 4), ("scale", 3)):
+                        vector = values.get(key)
+                        if not isinstance(vector, list) or len(vector) != length:
+                            raise ValueError("骨骼 %s 缺少有效的 %s。" % (name, key))
+                        numbers = [float(value) for value in vector]
+                        if not all(math.isfinite(value) for value in numbers):
+                            raise ValueError("骨骼 %s 含有非有限数值。" % name)
+                        clean[key] = numbers
+                    validated_bones[name] = clean
+                    matched_bones.add(name)
+                validated.append((frame, validated_bones))
+            if not matched_bones:
+                raise ValueError("当前骨架与该动作没有同名骨骼，无法导入。")
+        except Exception as exc:
+            self.report({"ERROR"}, "动作 JSON 无法导入：" + str(exc))
+            return {"CANCELLED"}
+
+        scene = context.scene
+        original_frame = scene.frame_current
+        old_action = rig.animation_data.action if rig.animation_data else None
+        new_action = None
+        try:
+            rig.animation_data_create()
+            rig.animation_data.action = None
+            for frame, bone_data in validated:
+                scene.frame_set(frame)
+                for name, values in bone_data.items():
+                    bone = rig.pose.bones.get(name)
+                    bone.location = values["location"]
+                    bone.rotation_mode = "QUATERNION"
+                    bone.rotation_quaternion = values["rotation_quaternion"]
+                    bone.scale = values["scale"]
+                    bone.keyframe_insert(data_path="location", frame=frame, group=name)
+                    bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=name)
+                    bone.keyframe_insert(data_path="scale", frame=frame, group=name)
+            new_action = rig.animation_data.action
+            if new_action is None:
+                raise RuntimeError("Blender 未创建动画 Action。")
+            imported_name = Path(filepath).stem
+            new_action.name = "RH导入动作 | " + imported_name[:64]
+            new_action.use_fake_user = True
+        except Exception as exc:
+            rig.animation_data.action = old_action
+            if new_action is not None and new_action.users == 0:
+                bpy.data.actions.remove(new_action)
+            self.report({"ERROR"}, "写入动作失败，已恢复原动作：" + str(exc))
+            return {"CANCELLED"}
+        finally:
+            scene.frame_set(original_frame)
+            context.view_layer.update()
+        self.report({"INFO"}, "已导入动作 JSON，匹配 %d 根骨骼、%d 个采样帧。" %
+                    (len(matched_bones), len(validated)))
+        return {"FINISHED"}
+
+
 class RH_OT_check_action_sequence(bpy.types.Operator):
     bl_idname = "rh_studio.check_action_sequence"
     bl_label = "检查动作序列"
@@ -1543,7 +1704,8 @@ CLASSES = (
     RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
     RH_OT_save_pose_preset, RH_OT_load_pose_preset,
-    RH_OT_save_action_set, RH_OT_load_action_set, RH_OT_check_action_sequence,
+    RH_OT_save_action_set, RH_OT_load_action_set,
+    RH_OT_export_action_json, RH_OT_import_action_json, RH_OT_check_action_sequence,
     RH_OT_check_pose_clearance, RH_OT_turn_body_preset, RH_OT_body_reaction_preset,
     RH_OT_simple_2d_pose_pad,
 )
