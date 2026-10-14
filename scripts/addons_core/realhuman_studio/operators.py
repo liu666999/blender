@@ -260,6 +260,79 @@ class RH_OT_fit_height(bpy.types.Operator):
         self.report({"INFO"}, "身高已校准；请检查模型朝向和场景单位。")
         return {"FINISHED"}
 
+class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
+    bl_idname = "rh_studio.generate_body_proportion_keys"
+    bl_label = "生成 / 更新体型控制"
+    bl_description = "Create reusable shape keys for broad shoulder, chest, waist and hip proportions"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and len(obj.data.vertices) >= 4)
+
+    def execute(self, context):
+        obj = context.active_object
+        # This first-stage proportion tool assumes an upright, single full-body
+        # mesh in local Z-up coordinates. It creates non-destructive shape keys.
+        if obj.data.shape_keys is None:
+            basis = obj.shape_key_add(name="Basis", from_mix=False)
+        else:
+            basis = obj.data.shape_keys.key_blocks[0]
+        base_coords = [basis.data[i].co.copy() for i in range(len(obj.data.vertices))]
+        if not base_coords:
+            self.report({"ERROR"}, "当前网格没有顶点。")
+            return {"CANCELLED"}
+
+        min_x = min(co.x for co in base_coords)
+        max_x = max(co.x for co in base_coords)
+        min_y = min(co.y for co in base_coords)
+        max_y = max(co.y for co in base_coords)
+        min_z = min(co.z for co in base_coords)
+        max_z = max(co.z for co in base_coords)
+        height = max_z - min_z
+        if height < 1e-6 or max_x - min_x < 1e-6:
+            self.report({"ERROR"}, "网格尺寸异常，无法生成体型控制。")
+            return {"CANCELLED"}
+
+        center_x = (min_x + max_x) * 0.5
+        center_y = (min_y + max_y) * 0.5
+        # name, label, vertical center, vertical falloff, X width, Y depth
+        specs = (
+            ("RH体型 | 肩宽", "肩宽", 0.79, 0.075, 0.16, 0.06),
+            ("RH体型 | 胸围", "胸围", 0.66, 0.085, 0.12, 0.14),
+            ("RH体型 | 腰围", "腰围", 0.52, 0.070, 0.18, 0.16),
+            ("RH体型 | 臀宽", "臀宽", 0.42, 0.075, 0.16, 0.10),
+        )
+        blocks = obj.data.shape_keys.key_blocks
+        created = 0
+        updated = 0
+        for key_name, label, center_ratio, sigma_ratio, x_amount, y_amount in specs:
+            key = blocks.get(key_name)
+            if key is None:
+                key = obj.shape_key_add(name=key_name, from_mix=False)
+                created += 1
+            else:
+                updated += 1
+            key.relative_key = basis
+            key.slider_min = -1.0
+            key.slider_max = 1.0
+            center_z = min_z + center_ratio * height
+            sigma = max(height * sigma_ratio, 1e-6)
+            for index, co in enumerate(base_coords):
+                weight = math.exp(-0.5 * ((co.z - center_z) / sigma) ** 2)
+                source = co
+                key.data[index].co = (
+                    center_x + (source.x - center_x) * (1.0 + x_amount * weight),
+                    center_y + (source.y - center_y) * (1.0 + y_amount * weight),
+                    source.z,
+                )
+        context.view_layer.update()
+        self.report({"INFO"}, "体型控制已就绪：新建 %d 个，更新 %d 个。滑块范围为 -1 到 1。" %
+                    (created, updated))
+        return {"FINISHED"}
+
+
 class RH_OT_reset_shape_keys(bpy.types.Operator):
     bl_idname = "rh_studio.reset_shape_keys"
     bl_label = "重置形态键"
@@ -1831,7 +1904,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
