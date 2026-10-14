@@ -3,7 +3,7 @@
 """RealHuman Studio tools shipped with the Blender source tree."""
 bl_info = {
     "name": "RealHuman Studio", "author": "RealHuman Studio contributors",
-    "version": (0, 1, 0), "blender": (4, 5, 0),
+    "version": (0, 1, 0), "blender": (5, 4, 0),
     "location": "View3D > Sidebar > RealHuman",
     "description": "Human asset import, anatomy layers, shape-key controls, and export workflow",
     "category": "3D View",
