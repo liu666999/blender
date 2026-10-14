@@ -454,6 +454,26 @@ class RH_OT_generate_simple_rig(bpy.types.Operator):
         description="After creating the rig, ask Blender to bind the selected mesh with automatic weights",
         default=True,
     )
+    hip_height_ratio: FloatProperty(
+        name="髋部高度比例", description="髋部距网格底部的高度 / 总身高",
+        default=0.535, min=0.42, max=0.62, precision=3,
+    )
+    knee_height_ratio: FloatProperty(
+        name="膝部高度比例", description="膝部距网格底部的高度 / 总身高",
+        default=0.285, min=0.18, max=0.38, precision=3,
+    )
+    shoulder_height_ratio: FloatProperty(
+        name="肩部高度比例", description="肩部距网格底部的高度 / 总身高",
+        default=0.805, min=0.70, max=0.90, precision=3,
+    )
+    shoulder_width_ratio: FloatProperty(
+        name="肩宽半比例", description="单侧肩部距身体中线的距离 / 总身高",
+        default=0.12, min=0.07, max=0.22, precision=3,
+    )
+    arm_reach_ratio: FloatProperty(
+        name="手臂展开比例", description="单侧手臂从身体中线到手尖的水平距离 / 总身高",
+        default=0.50, min=0.34, max=0.68, precision=3,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -464,8 +484,13 @@ class RH_OT_generate_simple_rig(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self, width=440)
 
     def draw(self, context):
-        self.layout.label(text="按当前人体网格包围盒估算关节位置。")
-        self.layout.label(text="生成后仍需检查肩、肘、膝和衣物的变形。")
+        self.layout.label(text="按当前人体网格包围盒估算关节位置，可先调整基础比例。")
+        self.layout.label(text="这只是初始骨架；生成后仍需检查关节位置、权重和衣物变形。")
+        self.layout.prop(self, "hip_height_ratio")
+        self.layout.prop(self, "knee_height_ratio")
+        self.layout.prop(self, "shoulder_height_ratio")
+        self.layout.prop(self, "shoulder_width_ratio")
+        self.layout.prop(self, "arm_reach_ratio")
         self.layout.prop(self, "auto_bind")
 
     def execute(self, context):
@@ -492,19 +517,19 @@ class RH_OT_generate_simple_rig(bpy.types.Operator):
         cx = (min_x + max_x) * 0.5
         cy = (min_y + max_y) * 0.5
         h = height
-        hip_z = min_z + 0.535 * h
-        chest_z = min_z + 0.765 * h
-        shoulder_z = min_z + 0.805 * h
+        hip_z = min_z + self.hip_height_ratio * h
+        knee_z = min_z + self.knee_height_ratio * h
+        shoulder_z = min_z + self.shoulder_height_ratio * h
+        chest_z = min_z + min(0.765, (self.shoulder_height_ratio + 0.805) * 0.5) * h
         neck_z = min_z + 0.865 * h
         head_z = min_z + 0.895 * h
         head_top = min_z + 0.985 * h
-        knee_z = min_z + 0.285 * h
         ankle_z = min_z + 0.055 * h
         hip_half = max(0.055 * h, min(0.085 * h, (max_x - min_x) * 0.09))
-        shoulder_half = 0.12 * h
-        elbow_dist = 0.29 * h
-        wrist_dist = 0.465 * h
-        hand_dist = 0.50 * h
+        shoulder_half = self.shoulder_width_ratio * h
+        hand_dist = self.arm_reach_ratio * h
+        elbow_dist = hand_dist * 0.58
+        wrist_dist = hand_dist * 0.93
         foot_len = max(0.07 * h, (max_y - min_y) * 0.30)
 
         # Each tuple: head, tail, parent name, connected flag.
