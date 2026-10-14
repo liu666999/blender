@@ -402,8 +402,11 @@ class RH_OT_audit_selected_assets(bpy.types.Operator):
         for obj in objects:
             source_path = obj.get("rh_studio_source_path", "")
             dimensions = [float(v) for v in obj.dimensions]
-            dimensions_m = ([round(value * unit_scale, 6) for value in dimensions]
-                            if valid_unit_scale else None)
+            dimensions_m = (
+                [round(value * unit_scale, 6) for value in dimensions]
+                if valid_unit_scale and all(math.isfinite(value) for value in dimensions)
+                else None
+            )
             warnings = []
             record = {
                 "name": obj.name,
