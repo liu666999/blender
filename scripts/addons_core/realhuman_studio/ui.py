@@ -63,6 +63,9 @@ class RH_PT_main(bpy.types.Panel):
         body.prop(scene, "rh_studio_target_height")
         op = body.operator("rh_studio.fit_height", icon="FULLSCREEN_ENTER", text="校准当前网格")
         op.target_height = scene.rh_studio_target_height
+        op = body.operator("rh_studio.fit_selected_group_height", icon="CONSTRAINT", text="校准所选资源组（含骨架 / 衣物）")
+        op.target_height = scene.rh_studio_target_height
+        body.label(text="组校准会缩放所有选中对象；请先选齐身体网格、骨架和需同步的衣物。")
         body.operator("rh_studio.generate_body_proportion_keys", icon="MOD_MESHDEFORM",
                       text="生成 / 更新肩胸腰臀控制")
         body.label(text="适用于单个人体网格（Z 轴向上）；先创建控制，再调节下方形态键。")
