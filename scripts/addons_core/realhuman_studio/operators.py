@@ -1649,20 +1649,19 @@ class RH_OT_load_pose_preset(bpy.types.Operator):
 _ACTION_SET_PREFIX = "RH动作集 | "
 
 
-# Blender dynamic EnumProperty callbacks require their returned strings to
-# remain alive for as long as the enum is displayed. Keep both current items
-# and every string ever handed to Blender at module scope; returning a local
-# list can leave dangling string pointers during redraw/property conversion.
-_ACTION_SET_ENUM_ITEMS = []
+# Blender dynamic EnumProperty callbacks require returned strings and the
+# item tuples/list to remain alive while Blender holds their pointers. Keep a
+# stable cached tuple for each distinct action-set signature rather than
+# replacing the list on every callback (which can invalidate old item tuples).
+_ACTION_SET_ENUM_ITEMS_CACHE = {}
 _ACTION_SET_ENUM_STRING_CACHE = set()
 
 
 def _action_set_items(_self, _context):
-    global _ACTION_SET_ENUM_ITEMS
     items = []
     for action in bpy.data.actions:
         if action.name.startswith(_ACTION_SET_PREFIX):
-            label = action.name[len(_ACTION_SET_PREFIX):]
+            label = str(action.name[len(_ACTION_SET_PREFIX):])
             identifier = str(action.name)
             description = "已保存的整套关键帧动作"
             _ACTION_SET_ENUM_STRING_CACHE.update((identifier, label, description))
@@ -1671,9 +1670,12 @@ def _action_set_items(_self, _context):
         placeholder = ("", "暂无已保存动作集", "先为骨架记录至少一个关键帧，再保存动作集")
         _ACTION_SET_ENUM_STRING_CACHE.update(placeholder)
         items.append(placeholder)
-    _ACTION_SET_ENUM_ITEMS = items
-    return _ACTION_SET_ENUM_ITEMS
-
+    signature = tuple(items)
+    cached = _ACTION_SET_ENUM_ITEMS_CACHE.get(signature)
+    if cached is None:
+        cached = tuple(items)
+        _ACTION_SET_ENUM_ITEMS_CACHE[signature] = cached
+    return cached
 
 class RH_OT_save_action_set(bpy.types.Operator):
     bl_idname = "rh_studio.save_action_set"
