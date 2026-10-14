@@ -70,7 +70,11 @@ def run():
     ensure(mesh.dimensions.z > 1.5, "Test mesh should be tall enough to rig.")
     activate(mesh)
 
-    result = bpy.ops.rh_studio.generate_simple_rig(auto_bind=False)
+    result = bpy.ops.rh_studio.generate_simple_rig(
+        auto_bind=False, hip_height_ratio=0.54, knee_height_ratio=0.29,
+        shoulder_height_ratio=0.82, shoulder_width_ratio=0.125,
+        arm_reach_ratio=0.52,
+    )
     ensure("FINISHED" in result, "Simple rig generation operator failed.")
     rig = bpy.context.object
     ensure(rig and rig.type == "ARMATURE", "Rig was not made active.")
