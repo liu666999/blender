@@ -159,6 +159,13 @@ def run():
         ensure(rig_copy.animation_data.action is not None
                and rig_copy.animation_data.action.name.startswith("RH导入动作 | "),
                "Imported JSON did not create and assign a named action.")
+        imported_action = rig_copy.animation_data.action
+        invalid_json_path = os.path.join(tmp, "invalid_action.json")
+        with open(invalid_json_path, "w", encoding="utf-8") as stream:
+            json.dump({"format": "not_an_action"}, stream)
+        result = bpy.ops.rh_studio.import_action_json(filepath=invalid_json_path)
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Invalid JSON should be rejected without replacing the current action.")
 
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
