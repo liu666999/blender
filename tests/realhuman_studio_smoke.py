@@ -306,6 +306,46 @@ def run():
                        for warning in project_audit.get("project_history", {}).get("warnings", []))
                and project_audit.get("object_count", 0) >= 1,
                "Project audit missed broken links or project history inconsistencies.")
+        # Candidate scan is preview-only and ranks exact filename/extension candidates by recorded size.
+        scan_root = os.path.join(audit_tmp, "source_recovery")
+        os.makedirs(scan_root, exist_ok=True)
+        scan_candidate = os.path.join(scan_root, "lost_asset.fbx")
+        with open(scan_candidate, "wb") as stream:
+            stream.write(b"known-size-original")
+        scan_manifest_path = os.path.join(audit_tmp, "realhuman_project.json")
+        with open(scan_manifest_path, "r", encoding="utf-8") as stream:
+            scan_manifest = json.load(stream)
+        scan_manifest["asset_sources"].append({
+            "batch_id": "ci-scan-batch",
+            "source_path": os.path.join(audit_tmp, "gone", "lost_asset.fbx"),
+            "source_size_bytes": os.path.getsize(scan_candidate),
+            "objects": [{"name": "RH CI Scan Asset", "type": "MESH"}],
+        })
+        with open(scan_manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(scan_manifest, stream, ensure_ascii=False, indent=2)
+        bpy.ops.mesh.primitive_cube_add(size=1.0)
+        scan_asset = bpy.context.object
+        scan_asset.name = "RH CI Scan Asset"
+        old_scan_path = os.path.join(audit_tmp, "gone", "lost_asset.fbx")
+        scan_asset["rh_studio_source_path"] = old_scan_path
+        scan_asset["rh_studio_import_batch_id"] = "ci-scan-batch"
+        activate(scan_asset)
+        scan_report_path = os.path.join(audit_tmp, "missing_source_candidates.json")
+        result = bpy.ops.rh_studio.scan_missing_sources(directory=scan_root, filepath=scan_report_path)
+        ensure("FINISHED" in result and os.path.isfile(scan_report_path),
+               "Missing-source candidate scan did not write its report.")
+        with open(scan_report_path, "r", encoding="utf-8") as stream:
+            scan_report = json.load(stream)
+        scan_records = [item for item in scan_report["objects"] if item["object_name"] == scan_asset.name]
+        ensure(len(scan_records) == 1
+               and scan_records[0]["candidate_status"] == "unique_exact_size_match"
+               and scan_records[0]["candidates"][0]["path"] == os.path.normpath(scan_candidate)
+               and scan_records[0]["candidates"][0]["size_match"],
+               "Candidate scan failed to find the unique same-name, same-extension, same-size candidate.")
+        ensure(scan_asset["rh_studio_source_path"] == old_scan_path,
+               "Candidate scan must not mutate source-path metadata.")
+        bpy.data.objects.remove(scan_asset, do_unlink=True)
+
         # Relinking repairs metadata only; it must also update the matching history batch atomically.
         relink_source = os.path.join(audit_tmp, "recovered_original.fbx")
         with open(relink_source, "wb") as stream:
