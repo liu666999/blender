@@ -1175,9 +1175,12 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
             new_action.name = "RH导入动作 | " + imported_name[:64]
             new_action.use_fake_user = True
         except Exception as exc:
+            partial_action = rig.animation_data.action if rig.animation_data else None
             rig.animation_data.action = old_action
-            if new_action is not None and new_action.users == 0:
-                bpy.data.actions.remove(new_action)
+            orphan_action = new_action or partial_action
+            if (orphan_action is not None and orphan_action != old_action
+                    and orphan_action.users == 0):
+                bpy.data.actions.remove(orphan_action)
             self.report({"ERROR"}, "写入动作失败，已恢复原动作：" + str(exc))
             return {"CANCELLED"}
         finally:
