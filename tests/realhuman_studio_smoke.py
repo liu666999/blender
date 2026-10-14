@@ -193,6 +193,18 @@ def run():
         ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
                "Invalid JSON should be rejected without replacing the current action.")
 
+        invalid_fps_path = os.path.join(tmp, "invalid_fps_action.json")
+        invalid_fps_payload = dict(action_payload)
+        invalid_fps_payload["fps"] = float("nan")
+        with open(invalid_fps_path, "w", encoding="utf-8") as stream:
+            json.dump(invalid_fps_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_fps_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Non-finite FPS metadata should be rejected without replacing the current action.")
+
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties were not unregistered.")
