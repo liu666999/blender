@@ -23,6 +23,10 @@ The add-on source lives in scripts/addons_core/realhuman_studio.
 - Save/load full keyed animation Actions as named reusable action sets inside the `.blend` file, and run basic action-sequence checks for missing actions, invalid frame ranges, single-frame clips, and the current frame being outside the action range.
 - Trigger existing body-reaction morph keys for effects such as bulging veins or tense muscles, when the imported model actually provides those shape keys.
 
+## Project audit
+
+See [REALHUMAN_STUDIO_AUDIT.md](REALHUMAN_STUDIO_AUDIT.md) for a source-level inventory of implemented features, incomplete areas, known risks, and a manual GUI validation checklist. Source presence and headless smoke coverage are distinguished from visually verified behavior.
+
 ## Use
 
 1. Build Blender from this fork using the official build instructions for your operating system.
