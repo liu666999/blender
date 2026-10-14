@@ -347,7 +347,7 @@ class RH_OT_diagnose_asset_scale(bpy.types.Operator):
         dimensions = [maximum[i] - minimum[i] for i in range(3)]
         height = dimensions[2]
         scene = context.scene
-        unit_scale = float(scene.unit_settings.scale) if scene.unit_settings else 1.0
+        unit_scale = float(scene.unit_settings.scale_length) if scene.unit_settings else 1.0
         # These are hypotheses only. Blender object coordinates have no guaranteed real-world unit.
         candidates = []
         for label, factor in (("按米解释", 1.0), ("按厘米解释", 0.01), ("按毫米解释", 0.001)):
