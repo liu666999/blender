@@ -43,9 +43,10 @@ This repository commit is source code, not a prebuilt Windows installer or EXE. 
 
 ## Runtime compatibility
 
-- The add-on declares Blender 4.5.0 as its minimum version. CI uses Blender 5.2.2 as a practical runtime smoke-test environment; this is a test harness, not a demand that users install a particular LTS release.
+- Development follows this GitHub source branch. Its `source/blender/blenkernel/BKE_blender_version.h` currently declares Blender 5.4.0 Alpha; the add-on metadata and runtime smoke test now use that branch version as the baseline rather than promising compatibility with older Blender releases.
+- CI reads the Blender version and release cycle from the checked-out branch, locates a matching Linux x64 daily runtime, and runs the headless smoke suite against that runtime. When the branch's declared version changes, the test target follows it automatically.
 - The headless runtime smoke test covers add-on registration/unregistration, rig generation, pose presets, keyframing, pose save/load, facing and clearance operators, fabric material construction, and project manifest creation. CI requires an explicit PASS marker, so a Python traceback inside Blender cannot silently pass the job.
-- The repository's current Blender source version header tracks 5.4.0 Alpha; the separate LTS test matrix checks compatibility against stable runtimes. The headless smoke test cannot exercise interactive GPU overlay drawing or real mouse input, which still need a GUI-session check.
+- The headless test still cannot exercise interactive GPU overlay drawing or real mouse input; those need a GUI-session check. Blender daily builds can also change or break, so CI failures should be fixed against the checked-out branch rather than by silently downgrading the test runtime.
 
 ## License
 
