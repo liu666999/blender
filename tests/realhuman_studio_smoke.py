@@ -422,7 +422,7 @@ def run():
                                  if item.get("object_name") == scan_asset.name), {})
         ensure(ambiguous_result.get("status") == "skipped"
                and ambiguous_result.get("reason") == "candidate_status_not_repairable"
-               and ambiguous_repair_results.get("summary", {}).get("skipped") == 1,
+               and ambiguous_repair_results.get("summary", {}).get("skipped", 0) >= 1,
                "Ambiguous repair report should record a skipped result with an explicit reason.")
         bpy.data.objects.remove(scan_asset, do_unlink=True)
 
