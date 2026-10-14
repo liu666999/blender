@@ -90,6 +90,30 @@ def run():
     ensure(abs(hand_tail.x - 0.52 * 1.8) < 0.03,
            "Custom arm-reach ratio was not applied.")
 
+    # Exercise direct selected-bone rotation editing and optional keyframing.
+    activate(rig)
+    bpy.ops.object.mode_set(mode="POSE")
+    active_data_bone = rig.data.bones["forearm.R"]
+    for data_bone in rig.data.bones:
+        data_bone.select = False
+    active_data_bone.select = True
+    rig.data.bones.active = active_data_bone
+    ensure(bpy.context.active_pose_bone is not None
+           and bpy.context.active_pose_bone.name == "forearm.R",
+           "Could not select the target pose bone for direct editing.")
+    result = bpy.ops.rh_studio.adjust_active_bone(
+        rotation_x=0.2, rotation_y=0.1, rotation_z=-0.15, insert_keyframe=True)
+    ensure("FINISHED" in result, "Direct selected-bone rotation adjustment failed.")
+    edited_bone = rig.pose.bones["forearm.R"]
+    ensure(edited_bone.rotation_mode == "XYZ"
+           and abs(edited_bone.rotation_euler.x - 0.2) < 1e-4
+           and abs(edited_bone.rotation_euler.y - 0.1) < 1e-4
+           and abs(edited_bone.rotation_euler.z + 0.15) < 1e-4,
+           "Direct bone rotation values were not applied.")
+    ensure(rig.animation_data is not None and rig.animation_data.action is not None,
+           "Selected-bone keyframe was not recorded.")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
     ensure("FINISHED" in bpy.ops.rh_studio.apply_pose_preset(preset="ARMS_UP"),
            "Apply pose preset failed.")
     ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
