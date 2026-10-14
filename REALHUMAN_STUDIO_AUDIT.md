@@ -18,6 +18,7 @@
 | Project folders and JSON manifest | Implemented; smoke-tested | Creates models, anatomy, clothing, textures, exports, logs and `realhuman_project.json`. |
 | Asset import and category collections | Implemented in source | Supports OBJ, FBX, GLB/GLTF, STL and PLY when the matching importer exists in the Blender build. |
 | Selected asset audit report | Implemented; smoke-tested | Writes JSON diagnostics for selected objects: world bounds, mesh counts, UV layers, materials, shape keys, armature links, loose geometry and non-manifold edges. Non-manifold edges are warnings, not automatic proof of a defect (open garment borders can be intentional). |
+| Selected asset position normalization | Implemented; smoke-tested | Non-destructively translates the selected object group so its X/Y bounds are centered and/or its lowest Z point sits at zero. Mesh coordinates and object scale are preserved; it does not infer real-world units or correct model orientation. |
 | Category selection, visibility and reassignment | Implemented in source | Uses Blender collections and object metadata. |
 | Height calibration | Implemented in source | Uniform scaling and bottom-to-Z=0 adjustment; not anatomy-aware proportion editing. |
 | Body proportion shape keys | Implemented; smoke test added | Generates reusable shoulder-width, chest-depth/width, waist, and hip-width shape keys with -1..+1 sliders. Uses smooth vertical weighting on a single upright Z-up mesh; it is a first-stage generic deformation, not anatomy-aware sculpting or a guarantee of realistic results on every topology. |
@@ -45,7 +46,7 @@
 - No true 2D-to-3D inverse kinematics, joint-length solving, motion retargeting, contact-aware animation, or reliable mesh-collision solving.
 - No visual quality guarantee for automatic skin weights, facial expressions, anatomical alignment, or mesh deformation.
 - No standalone application shell, installer, Windows executable/package, custom scripting console, or full Python-like project execution environment beyond Blender's existing facilities.
-- No third-party anatomy asset import pipeline with automated license review, semantic anatomy naming, unit conversion, or coordinate-system alignment. The selected-asset JSON audit is diagnostic only; it does not automatically repair or normalize imported geometry.
+- No third-party anatomy asset import pipeline with automated license review, semantic anatomy naming, unit conversion, or coordinate-system alignment. The selected-asset JSON audit is diagnostic only. Position normalization only translates the selected group; it does not apply transforms, infer real-world units, or correct model orientation.
 
 ## Known risks and manual validation checklist
 
@@ -64,4 +65,4 @@ The headless smoke script exercises Python API paths, not real mouse input, GPU 
 
 ## Current recommendation
 
-Continue in small, testable increments: validate the first-stage body proportion controls on real human topology, then add region-aware proportion drivers, asset normalization/repair tools, better rig deformation, and the missing clothing/anatomy workflows. Keep bundled third-party assets as a separate, license-reviewed milestone.
+Continue in small, testable increments: validate the first-stage body proportion controls on real human topology, then add region-aware proportion drivers, unit/orientation-aware asset normalization and repair tools, better rig deformation, and the missing clothing/anatomy workflows. Keep bundled third-party assets as a separate, license-reviewed milestone.
