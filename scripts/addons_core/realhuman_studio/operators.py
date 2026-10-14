@@ -298,7 +298,7 @@ class RH_OT_audit_selected_assets(bpy.types.Operator):
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             with open(path, "w", encoding="utf-8") as stream:
                 json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\\n")
+                stream.write("\n")
         except (OSError, ValueError) as exc:
             self.report({"ERROR"}, "无法写入资源检查报告：" + str(exc))
             return {"CANCELLED"}
