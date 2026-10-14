@@ -142,6 +142,24 @@ def run():
         ensure(manifest.get("application") == "RealHuman Studio",
                "Project manifest content is unexpected.")
 
+        # Verify the portable action JSON round-trip against a second rig.
+        json_path = os.path.join(tmp, "ci_motion.json")
+        activate(rig)
+        ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=json_path),
+               "Action JSON export failed.")
+        ensure(os.path.isfile(json_path), "Action JSON file was not created.")
+        with open(json_path, "r", encoding="utf-8") as stream:
+            action_payload = json.load(stream)
+        ensure(action_payload.get("format") == "realhuman_studio_action_v1"
+               and len(action_payload.get("frames", [])) >= 2,
+               "Exported action JSON is missing its format marker or frame samples.")
+        activate(rig_copy)
+        ensure("FINISHED" in bpy.ops.rh_studio.import_action_json(filepath=json_path),
+               "Action JSON import failed.")
+        ensure(rig_copy.animation_data.action is not None
+               and rig_copy.animation_data.action.name.startswith("RH导入动作 | "),
+               "Imported JSON did not create and assign a named action.")
+
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties were not unregistered.")
