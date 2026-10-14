@@ -85,6 +85,33 @@ def run():
     ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
            "Keyframe insertion failed.")
     ensure(rig.animation_data is not None, "Pose action was not created.")
+
+    # Give the clip a real span, then verify reusable action-set save/load and
+    # that saving a duplicate name never removes an Action used by another rig.
+    bpy.context.scene.frame_set(bpy.context.scene.frame_current + 12)
+    ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
+           "Second keyframe insertion failed.")
+    ensure("FINISHED" in bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion"),
+           "Saving a named action set failed.")
+    saved_action = bpy.data.actions.get("RH动作集 | CI Motion")
+    ensure(saved_action is not None and saved_action.use_fake_user,
+           "Named action set was not preserved in the .blend data.")
+    rig_copy = rig.copy()
+    rig_copy.data = rig.data.copy()
+    bpy.context.scene.collection.objects.link(rig_copy)
+    rig_copy.animation_data_create()
+    rig_copy.animation_data.action = saved_action
+    ensure("FINISHED" in bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion"),
+           "Saving a duplicate action-set name should safely create a numbered copy.")
+    ensure(rig_copy.animation_data.action == saved_action and saved_action.name in bpy.data.actions,
+           "Saving a duplicate action set broke an Action used by another rig.")
+    ensure("FINISHED" in bpy.ops.rh_studio.load_action_set(action_set="RH动作集 | CI Motion"),
+           "Loading a named action set failed.")
+    ensure(rig.animation_data.action == saved_action,
+           "The selected named action set was not assigned to the rig.")
+    ensure("FINISHED" in bpy.ops.rh_studio.check_action_sequence(),
+           "Basic action sequence check failed.")
+
     ensure("FINISHED" in bpy.ops.rh_studio.save_pose_preset(preset_name="CI Smoke"),
            "Saving a pose preset failed.")
     ensure("FINISHED" in bpy.ops.rh_studio.load_pose_preset(preset_name="CI Smoke"),
