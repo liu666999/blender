@@ -417,7 +417,7 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         ("CHECKER", "格纹", "Checkerboard print")), default="DOTS")
     density: FloatProperty(name="图案密度", description="Higher values create more repeats per UV tile", default=12.0, min=1.0, max=100.0)
     sparsity: FloatProperty(name="稀疏度", description="Higher values leave more base fabric visible", default=0.35, min=0.0, max=0.95, subtype="FACTOR")
-    rotation: FloatProperty(name="旋转（度）", default=0.0, min=-180.0, max=180.0, subtype="ANGLE")
+    rotation: FloatProperty(name="旋转（度）", default=0.0, min=-math.pi, max=math.pi, subtype="ANGLE")
     coordinate_source: EnumProperty(name="坐标来源", items=(
         ("UV", "UV 贴图", "Use the garment's UV map"),
         ("OBJECT", "物体坐标", "Place the pattern in object-local 3D coordinates"),
