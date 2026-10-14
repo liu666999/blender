@@ -99,6 +99,10 @@ class RH_PT_main(bpy.types.Panel):
         row = pose_controls.row(align=True)
         row.operator("rh_studio.save_pose_preset", icon="PRESET", text="保存动作预设")
         row.operator("rh_studio.load_pose_preset", icon="IMPORT", text="载入动作预设")
+        action_row = pose_controls.row(align=True)
+        action_row.operator("rh_studio.save_action_set", icon="ACTION", text="保存整套动作")
+        action_row.operator("rh_studio.load_action_set", icon="IMPORT", text="载入整套动作")
+        pose_controls.operator("rh_studio.check_action_sequence", icon="CHECKMARK", text="检查动作序列")
         pose_controls.operator("rh_studio.check_pose_clearance", icon="MOD_PHYSICS", text="检查肢体间距风险")
         facing_row = pose_controls.row(align=True)
         for facing, label in (("FRONT", "正面"), ("THREE_QUARTER_L", "左45°"), ("THREE_QUARTER_R", "右45°")):
