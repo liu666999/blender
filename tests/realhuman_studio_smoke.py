@@ -58,6 +58,9 @@ def run():
     realhuman_studio.register()
     ensure(hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties did not register.")
+    ensure(hasattr(bpy.ops.rh_studio, "view_missing_source_repair_results")
+           and hasattr(bpy.ops.rh_studio, "copy_repair_result_path"),
+           "Missing-source repair result viewer/copy operators did not register.")
 
     clean_scene()
 
