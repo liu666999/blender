@@ -33,10 +33,13 @@ jobs:
     needs: python-syntax
     strategy:
       fail-fast: false
-      # Use one known working Blender runtime for fast feedback. The app's
-      # source branch remains the feature branch; this is not a release target.
+      # Test against an LTS baseline and a newer runtime. The source branch
+      # is not tied to one Blender minor version; compatibility is established
+      # by the smoke-test matrix rather than assumptions.
       matrix:
         include:
+          - version: "4.5.3"
+            series: "4.5"
           - version: "5.2.2"
             series: "5.2"
     steps:
