@@ -87,6 +87,12 @@ class RH_PT_main(bpy.types.Panel):
             pose_controls.operator("rh_studio.simple_2d_pose_pad", text="打开简笔摆姿")
             mode_label = "退出姿势编辑" if context.active_object.mode == "POSE" else "进入姿势编辑（旋转骨骼）"
             pose_controls.operator("rh_studio.toggle_pose_mode", text=mode_label)
+            if context.active_object.mode == "POSE" and context.active_pose_bone:
+                pose_controls.operator(
+                    "rh_studio.adjust_active_bone", icon="DRIVER_ROTATIONAL_DIFFERENCE",
+                    text="微调选中骨骼旋转")
+            elif context.active_object.mode == "POSE":
+                pose_controls.label(text="在视图中选中一根骨骼后，可微调局部 XYZ 旋转。")
         row = pose_controls.row(align=True)
         for preset, label in (("REST", "站立复位"), ("RELAXED", "放松"), ("ARMS_UP", "举手")):
             op = row.operator("rh_studio.apply_pose_preset", text=label)
