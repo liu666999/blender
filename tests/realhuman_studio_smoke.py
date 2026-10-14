@@ -233,6 +233,27 @@ def run():
            "Regional print should affect only the selected face.")
     bpy.data.objects.remove(region_mesh, do_unlink=True)
 
+    # Selected asset audit should create a portable JSON report with real mesh statistics.
+    activate(garment)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_asset_audit_") as audit_tmp:
+        audit_path = os.path.join(audit_tmp, "asset_audit.json")
+        result = bpy.ops.rh_studio.audit_selected_assets(filepath=audit_path)
+        ensure("FINISHED" in result and os.path.isfile(audit_path),
+               "Selected asset audit did not write its JSON report.")
+        with open(audit_path, "r", encoding="utf-8") as stream:
+            audit_payload = json.load(stream)
+        ensure(audit_payload.get("schema") == "realhuman_studio_asset_audit_v1"
+               and audit_payload.get("object_count") == 1,
+               "Asset audit report schema or object count is incorrect.")
+        audited = audit_payload["objects"][0]
+        ensure(audited.get("name") == garment.name
+               and audited.get("mesh", {}).get("vertices") == len(garment.data.vertices)
+               and audited.get("mesh", {}).get("polygons") == len(garment.data.polygons),
+               "Asset audit did not report accurate mesh statistics.")
+        ensure("uv_layers" in audited["mesh"]
+               and "non_manifold_edges" in audited["mesh"],
+               "Asset audit omitted UV or topology diagnostics.")
+
     # Validate the project folder scaffolding and manifest in a temporary folder.
     with tempfile.TemporaryDirectory(prefix="rh_studio_ci_") as tmp:
         result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
