@@ -798,6 +798,29 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
             for batch_id in conflicted_batches:
                 batch_entry_by_id.pop(batch_id, None)
 
+        # Re-stat every approved candidate immediately before preparing the manifest.
+        # If a file changed during validation, reject the entire import batch.
+        unstable_batches = set()
+        for item in approved:
+            try:
+                final_size = os.path.getsize(item["target"])
+            except OSError:
+                final_size = None
+            if final_size != item["expected_size"]:
+                unstable_batches.add(str(item["object"].get("rh_studio_import_batch_id", "")))
+                item["result"].update(
+                    status="skipped", reason="candidate_changed_before_manifest_commit",
+                    actual_size_bytes=final_size)
+        if unstable_batches:
+            for batch_id in unstable_batches:
+                for item in grouped.get(batch_id, []):
+                    if item["result"].get("status") == "pending":
+                        item["result"].update(
+                            status="skipped", reason="another_candidate_in_batch_changed_before_commit")
+                batch_entry_by_id.pop(batch_id, None)
+            approved = [item for item in approved
+                        if str(item["object"].get("rh_studio_import_batch_id", "")) not in unstable_batches]
+
         if not approved:
             write_results()
             skipped = sum(item["status"] == "skipped" for item in results)
