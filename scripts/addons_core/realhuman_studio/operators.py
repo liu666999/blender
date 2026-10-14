@@ -185,6 +185,127 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                     (len(imported), CATEGORY_COLLECTIONS[self.category]))
         return {"FINISHED"}
 
+class RH_OT_audit_selected_assets(bpy.types.Operator):
+    bl_idname = "rh_studio.audit_selected_assets"
+    bl_label = "检查所选资源并生成报告"
+    bl_description = "Write a JSON report with mesh statistics, materials, UVs, shape keys, rig links and geometry warnings"
+    bl_options = {"REGISTER"}
+
+    filepath: StringProperty(
+        name="报告文件", subtype="FILE_PATH",
+        default="//rh_studio_asset_audit.json")
+
+    def invoke(self, context, event):
+        root = bpy.path.abspath(context.scene.rh_studio_project_root or "//")
+        logs_dir = os.path.join(root, "logs") if root else ""
+        if logs_dir and os.path.isdir(logs_dir):
+            self.filepath = os.path.join(logs_dir, "asset_audit.json")
+        else:
+            self.filepath = bpy.path.abspath("//rh_studio_asset_audit.json")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        objects = list(context.selected_objects)
+        if not objects:
+            self.report({"WARNING"}, "请先选择要检查的对象。")
+            return {"CANCELLED"}
+
+        report_objects = []
+        for obj in objects:
+            record = {
+                "name": obj.name,
+                "type": obj.type,
+                "category": obj.get("rh_studio_category", "UNASSIGNED"),
+                "source_path": obj.get("rh_studio_source_path", ""),
+                "dimensions_world": [round(float(v), 6) for v in obj.dimensions],
+                "world_bounds": None,
+                "warnings": [],
+            }
+            if obj.bound_box:
+                corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+                record["world_bounds"] = {
+                    "min": [round(min(p[i] for p in corners), 6) for i in range(3)],
+                    "max": [round(max(p[i] for p in corners), 6) for i in range(3)],
+                }
+
+            if obj.type == "MESH":
+                mesh = obj.data
+                uv_names = [layer.name for layer in mesh.uv_layers]
+                material_names = [
+                    slot.material.name if slot.material else None
+                    for slot in obj.material_slots
+                ]
+                shape_keys = (
+                    [key.name for key in mesh.shape_keys.key_blocks]
+                    if mesh.shape_keys else []
+                )
+                armature_targets = [
+                    modifier.object.name for modifier in obj.modifiers
+                    if modifier.type == "ARMATURE" and modifier.object
+                ]
+                bm = bmesh.new()
+                try:
+                    bm.from_mesh(mesh)
+                    non_manifold_edges = sum(1 for edge in bm.edges if not edge.is_manifold)
+                    loose_vertices = sum(1 for vertex in bm.verts if not vertex.link_edges)
+                    loose_edges = sum(1 for edge in bm.edges if not edge.link_faces)
+                finally:
+                    bm.free()
+                record["mesh"] = {
+                    "vertices": len(mesh.vertices),
+                    "edges": len(mesh.edges),
+                    "polygons": len(mesh.polygons),
+                    "uv_layers": uv_names,
+                    "materials": material_names,
+                    "shape_keys": shape_keys,
+                    "armature_targets": armature_targets,
+                    "non_manifold_edges": non_manifold_edges,
+                    "loose_vertices": loose_vertices,
+                    "loose_edges": loose_edges,
+                }
+                if mesh.polygons and not uv_names:
+                    record["warnings"].append("网格没有 UV 图层；UV 印花和纹理工作流可能不可用。")
+                if mesh.polygons and not any(material_names):
+                    record["warnings"].append("网格没有已分配材质。")
+                if not mesh.vertices:
+                    record["warnings"].append("网格没有顶点。")
+                if non_manifold_edges:
+                    record["warnings"].append(
+                        "存在 %d 条非流形边；开口服装边缘可能是有意设计，请结合用途检查。" %
+                        non_manifold_edges
+                    )
+            elif obj.type == "ARMATURE":
+                record["armature"] = {
+                    "bones": len(obj.data.bones),
+                    "pose_bones": len(obj.pose.bones) if obj.pose else 0,
+                    "action": (
+                        obj.animation_data.action.name
+                        if obj.animation_data and obj.animation_data.action else None
+                    ),
+                }
+            report_objects.append(record)
+
+        payload = {
+            "schema": "realhuman_studio_asset_audit_v1",
+            "blender_version": bpy.app.version_string,
+            "blend_file": bpy.data.filepath or None,
+            "object_count": len(report_objects),
+            "objects": report_objects,
+        }
+        path = os.path.abspath(bpy.path.abspath(self.filepath))
+        try:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "w", encoding="utf-8") as stream:
+                json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.write("\\n")
+        except (OSError, ValueError) as exc:
+            self.report({"ERROR"}, "无法写入资源检查报告：" + str(exc))
+            return {"CANCELLED"}
+        self.report({"INFO"}, "已检查 %d 个对象并写入报告：%s" % (len(report_objects), path))
+        return {"FINISHED"}
+
+
 class RH_OT_assign_category(bpy.types.Operator):
     bl_idname = "rh_studio.assign_category"
     bl_label = "归入分类"
@@ -1953,7 +2074,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
         self._remove_handler()
 
 CLASSES = (
-    RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
+    RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,\n    RH_OT_audit_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
