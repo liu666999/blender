@@ -39,6 +39,7 @@ class RH_PT_main(bpy.types.Panel):
         assign = row.operator("rh_studio.assign_category", icon="FILE_PARENT", text="整理所选")
         assign.category = scene.rh_studio_import_category
         assets.operator("rh_studio.audit_selected_assets", icon="FILE_TEXT", text="检查所选资源并生成 JSON 报告")
+        normalize = assets.operator("rh_studio.normalize_selected_assets", icon="ORIENTATION_GLOBAL", text="规范化位置（居中 / 落地）")
 
         layers = layout.box()
         layers.label(text="解剖图层", icon="OUTLINER")
