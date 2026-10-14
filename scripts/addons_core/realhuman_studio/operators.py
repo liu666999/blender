@@ -905,15 +905,23 @@ class RH_OT_load_pose_preset(bpy.types.Operator):
 _ACTION_SET_PREFIX = "RH动作集 | "
 
 
+# Blender dynamic EnumProperty callbacks require their returned strings to
+# remain alive for as long as the enum is displayed. Keep the current items at
+# module scope; returning a local list can leave dangling string pointers.
+_ACTION_SET_ENUM_ITEMS = []
+
+
 def _action_set_items(_self, _context):
+    global _ACTION_SET_ENUM_ITEMS
     items = []
     for action in bpy.data.actions:
         if action.name.startswith(_ACTION_SET_PREFIX):
             label = action.name[len(_ACTION_SET_PREFIX):]
-            items.append((action.name, label, "已保存的整套关键帧动作"))
+            items.append((str(action.name), str(label), "已保存的整套关键帧动作"))
     if not items:
         items.append(("", "暂无已保存动作集", "先为骨架记录至少一个关键帧，再保存动作集"))
-    return items
+    _ACTION_SET_ENUM_ITEMS = items
+    return _ACTION_SET_ENUM_ITEMS
 
 
 class RH_OT_save_action_set(bpy.types.Operator):
