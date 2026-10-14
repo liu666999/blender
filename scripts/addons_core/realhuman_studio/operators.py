@@ -369,6 +369,181 @@ class RH_OT_export_asset_manifest(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_audit_project_assets(bpy.types.Operator):
+    bl_idname = "rh_studio.audit_project_assets"
+    bl_label = "检查整个项目资源"
+    bl_description = "Audit all objects in the current .blend and cross-check project import history"
+    bl_options = {"REGISTER"}
+
+    filepath: StringProperty(
+        name="项目检查报告", subtype="FILE_PATH",
+        default="//logs/project_integrity.json")
+
+    def invoke(self, context, event):
+        root = bpy.path.abspath(context.scene.rh_studio_project_root or "//")
+        if os.path.isdir(root):
+            logs_dir = os.path.join(root, "logs")
+            self.filepath = os.path.join(logs_dir, "project_integrity.json")
+        else:
+            self.filepath = bpy.path.abspath("//project_integrity.json")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        scene = context.scene
+        objects = list(bpy.data.objects)
+        names = {obj.name for obj in objects}
+        unit_scale = float(scene.unit_settings.scale_length or 1.0)
+        valid_scale = math.isfinite(unit_scale) and unit_scale > 0.0
+        records = []
+        counts = {
+            "objects": len(objects), "missing_source_files": 0,
+            "missing_armature_targets": 0, "missing_uvs": 0,
+            "missing_materials": 0, "suspicious_dimensions": 0,
+            "missing_import_batch_ids": 0,
+        }
+
+        for obj in objects:
+            warnings = []
+            source_path = str(obj.get("rh_studio_source_path", ""))
+            if source_path and not os.path.isfile(bpy.path.abspath(source_path)):
+                warnings.append("原始资源文件不存在或路径已失效")
+                counts["missing_source_files"] += 1
+            if obj.get("rh_studio_category") and not obj.get("rh_studio_import_batch_id"):
+                warnings.append("有资源分类但缺少导入批次 ID")
+                counts["missing_import_batch_ids"] += 1
+
+            dimensions = [float(value) for value in obj.dimensions]
+            if not all(math.isfinite(value) for value in dimensions):
+                warnings.append("对象尺寸包含非有限数值")
+                counts["suspicious_dimensions"] += 1
+            elif valid_scale:
+                largest_m = max(dimensions) * unit_scale
+                if largest_m < 0.005 or largest_m > 20.0:
+                    warnings.append("尺寸超出 5 毫米至 20 米的启发式检查范围")
+                    counts["suspicious_dimensions"] += 1
+
+            targets = []
+            for modifier in obj.modifiers:
+                if modifier.type == "ARMATURE":
+                    if modifier.object is None:
+                        warnings.append("骨架修改器没有绑定目标")
+                        counts["missing_armature_targets"] += 1
+                    else:
+                        targets.append(modifier.object.name)
+            if obj.parent and obj.parent.type == "ARMATURE" and obj.parent.name not in targets:
+                targets.append(obj.parent.name)
+
+            mesh_data = None
+            if obj.type == "MESH":
+                uv_count = len(obj.data.uv_layers)
+                material_count = sum(1 for slot in obj.material_slots if slot.material)
+                mesh_data = {
+                    "vertices": len(obj.data.vertices),
+                    "polygons": len(obj.data.polygons),
+                    "uv_layers": [layer.name for layer in obj.data.uv_layers],
+                    "materials": [slot.material.name if slot.material else None
+                                  for slot in obj.material_slots],
+                    "shape_keys": [key.name for key in obj.data.shape_keys.key_blocks]
+                                  if obj.data.shape_keys else [],
+                }
+                if obj.data.polygons and not uv_count:
+                    warnings.append("网格没有 UV 图层")
+                    counts["missing_uvs"] += 1
+                if obj.data.polygons and not material_count:
+                    warnings.append("网格没有已分配材质")
+                    counts["missing_materials"] += 1
+
+            records.append({
+                "name": obj.name, "type": obj.type,
+                "category": obj.get("rh_studio_category", "UNASSIGNED"),
+                "source_path": source_path,
+                "source_path_exists": bool(source_path and os.path.isfile(
+                    bpy.path.abspath(source_path))),
+                "import_batch_id": obj.get("rh_studio_import_batch_id", ""),
+                "imported_at": obj.get("rh_studio_imported_at", ""),
+                "dimensions_world": dimensions,
+                "dimensions_world_m": (
+                    [round(value * unit_scale, 6) for value in dimensions]
+                    if valid_scale and all(math.isfinite(value) for value in dimensions)
+                    else None),
+                "armature_targets": sorted(set(targets)),
+                "mesh": mesh_data, "warnings": warnings,
+            })
+
+        project_manifest_path = os.path.join(
+            bpy.path.abspath(scene.rh_studio_project_root or "//"),
+            "realhuman_project.json")
+        history = {"status": "not_found", "batch_count": 0, "warnings": []}
+        if os.path.isfile(project_manifest_path):
+            try:
+                with open(project_manifest_path, "r", encoding="utf-8") as stream:
+                    project_manifest = json.load(stream)
+                if not isinstance(project_manifest, dict):
+                    raise ValueError("项目清单根节点不是 JSON 对象")
+                batches = project_manifest.get("asset_sources", [])
+                if not isinstance(batches, list):
+                    raise ValueError("asset_sources 不是 JSON 数组")
+                history = {"status": "ok", "batch_count": len(batches), "warnings": []}
+                for batch in batches:
+                    if not isinstance(batch, dict):
+                        history["warnings"].append("发现格式无效的导入批次记录")
+                        continue
+                    source = batch.get("source_path", "")
+                    if source and not os.path.isfile(source):
+                        history["warnings"].append(
+                            "导入批次 %s 的源文件不存在：%s" %
+                            (batch.get("batch_id", "unknown"), source))
+                    recorded_names = [
+                        item.get("name") for item in batch.get("objects", [])
+                        if isinstance(item, dict) and item.get("name")
+                    ]
+                    missing_names = [name for name in recorded_names if name not in names]
+                    if missing_names:
+                        history["warnings"].append(
+                            "导入批次 %s 中记录的对象名称当前未找到：%s" %
+                            (batch.get("batch_id", "unknown"), ", ".join(missing_names)))
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                history = {"status": "invalid", "batch_count": 0,
+                           "warnings": ["无法读取项目清单：" + str(exc)]}
+        else:
+            history["warnings"].append("未找到 realhuman_project.json；未执行导入历史交叉检查")
+
+        payload = {
+            "schema": "realhuman_studio_project_integrity_v1",
+            "application": "RealHuman Studio",
+            "blender_version": bpy.app.version_string,
+            "blend_file": bpy.data.filepath or None,
+            "project_root": bpy.path.abspath(scene.rh_studio_project_root or "//"),
+            "meters_per_blender_unit": unit_scale if valid_scale else None,
+            "project_history": history,
+            "summary": counts,
+            "object_count": len(records),
+            "objects": records,
+        }
+        filepath = os.path.abspath(bpy.path.abspath(self.filepath))
+        try:
+            os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+            temp_path = filepath + ".tmp"
+            try:
+                with open(temp_path, "w", encoding="utf-8") as stream:
+                    json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                    stream.write("\n")
+                os.replace(temp_path, filepath)
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+        except (OSError, TypeError, ValueError) as exc:
+            self.report({"ERROR"}, "无法写入项目检查报告：" + str(exc))
+            return {"CANCELLED"}
+
+        issue_count = sum(value for key, value in counts.items() if key != "objects")
+        issue_count += len(history.get("warnings", []))
+        self.report({"INFO"}, "项目检查完成：%d 个对象，%d 项检查提示。报告：%s" %
+                    (len(records), issue_count, filepath))
+        return {"FINISHED"}
+
+
 class RH_OT_audit_selected_assets(bpy.types.Operator):
     bl_idname = "rh_studio.audit_selected_assets"
     bl_label = "检查所选资源并生成报告"
@@ -2571,7 +2746,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_export_asset_manifest, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
+    RH_OT_export_asset_manifest, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
