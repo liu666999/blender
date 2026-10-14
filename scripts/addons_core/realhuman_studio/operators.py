@@ -598,13 +598,14 @@ class RH_OT_fit_selected_group_height(bpy.types.Operator):
             self.report({"ERROR"}, "计算出的缩放比例无效，未修改资源。")
             return {"CANCELLED"}
 
-        # Scale around the group's horizontal center and bottom in world space.
+        # Move the group's horizontal center and bottom to the world origin,
+        # then apply a uniform scale. This guarantees the final lower Z is zero.
         # Apply parent objects before selected descendants so their final world
         # matrices remain consistent with the same group transform.
         pivot = Vector(((minimum.x + maximum.x) * 0.5,
                         (minimum.y + maximum.y) * 0.5, minimum.z))
         scale = Matrix.Diagonal((factor, factor, factor, 1.0))
-        transform = Matrix.Translation(pivot) @ scale @ Matrix.Translation(-pivot)
+        transform = scale @ Matrix.Translation(-pivot)
 
         def parent_depth(obj):
             depth, parent = 0, obj.parent
