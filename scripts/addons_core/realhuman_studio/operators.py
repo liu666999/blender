@@ -185,6 +185,131 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                     (len(imported), CATEGORY_COLLECTIONS[self.category]))
         return {"FINISHED"}
 
+class RH_OT_export_asset_manifest(bpy.types.Operator):
+    bl_idname = "rh_studio.export_asset_manifest"
+    bl_label = "导出所选资源清单"
+    bl_description = "Export selected asset metadata, dimensions in meters, geometry statistics and rig links to JSON"
+    bl_options = {"REGISTER"}
+
+    filepath: StringProperty(
+        name="资源清单", subtype="FILE_PATH",
+        default="//rh_studio_asset_manifest.json")
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_objects)
+
+    def invoke(self, context, event):
+        root = bpy.path.abspath(context.scene.rh_studio_project_root or "//")
+        logs_dir = os.path.join(root, "logs") if root else ""
+        if logs_dir and os.path.isdir(logs_dir):
+            self.filepath = os.path.join(logs_dir, "asset_manifest.json")
+        else:
+            self.filepath = bpy.path.abspath("//rh_studio_asset_manifest.json")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        objects = list(context.selected_objects)
+        if not objects:
+            self.report({"WARNING"}, "请先选择要导出的资源。")
+            return {"CANCELLED"}
+
+        scene = context.scene
+        unit_scale = float(scene.unit_settings.scale_length or 1.0)
+        if not math.isfinite(unit_scale) or unit_scale <= 0.0:
+            self.report({"ERROR"}, "场景单位比例无效，无法生成米制清单。")
+            return {"CANCELLED"}
+
+        records = []
+        for obj in objects:
+            corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+            bounds = None
+            if corners:
+                bounds = {
+                    "min_m": [round(min(point[i] for point in corners) * unit_scale, 6)
+                              for i in range(3)],
+                    "max_m": [round(max(point[i] for point in corners) * unit_scale, 6)
+                              for i in range(3)],
+                    "size_m": [round((max(point[i] for point in corners) -
+                                      min(point[i] for point in corners)) * unit_scale, 6)
+                               for i in range(3)],
+                }
+
+            armature_targets = []
+            warnings = []
+            for modifier in obj.modifiers:
+                if modifier.type == "ARMATURE" and modifier.object is not None:
+                    armature_targets.append(modifier.object.name)
+                    if modifier.object not in objects:
+                        warnings.append("绑定骨架未包含在本次选择中")
+            if obj.parent is not None and obj.parent.type == "ARMATURE":
+                if obj.parent.name not in armature_targets:
+                    armature_targets.append(obj.parent.name)
+                if obj.parent not in objects:
+                    warnings.append("父级骨架未包含在本次选择中")
+
+            mesh_data = None
+            if obj.type == "MESH":
+                mesh_data = {
+                    "vertices": len(obj.data.vertices),
+                    "edges": len(obj.data.edges),
+                    "polygons": len(obj.data.polygons),
+                    "uv_layers": [layer.name for layer in obj.data.uv_layers],
+                    "materials": [slot.material.name if slot.material else None
+                                  for slot in obj.material_slots],
+                    "shape_keys": [key.name for key in obj.data.shape_keys.key_blocks]
+                                  if obj.data.shape_keys else [],
+                }
+                if not obj.data.uv_layers:
+                    warnings.append("网格没有 UV 图层")
+                if not obj.data.materials:
+                    warnings.append("网格没有材质槽")
+
+            records.append({
+                "name": obj.name,
+                "type": obj.type,
+                "category": obj.get("rh_studio_category", "UNASSIGNED"),
+                "source_path": obj.get("rh_studio_source_path", ""),
+                "collections": sorted(collection.name for collection in obj.users_collection),
+                "dimensions_world_m": [round(float(value) * unit_scale, 6)
+                                        for value in obj.dimensions],
+                "world_bounds": bounds,
+                "location_world_m": [round(float(value) * unit_scale, 6)
+                                     for value in obj.matrix_world.translation],
+                "rotation_world_quaternion": [round(float(value), 8)
+                                              for value in obj.matrix_world.to_quaternion()],
+                "scale": [round(float(value), 8) for value in obj.scale],
+                "armature_targets": sorted(set(armature_targets)),
+                "mesh": mesh_data,
+                "warnings": sorted(set(warnings)),
+            })
+
+        manifest = {
+            "schema": "realhuman_studio_asset_manifest_v1",
+            "application": "RealHuman Studio",
+            "blender_version": bpy.app.version_string,
+            "scene_unit_system": scene.unit_settings.system,
+            "meters_per_blender_unit": unit_scale,
+            "object_count": len(records),
+            "objects": records,
+        }
+        filepath = os.path.abspath(bpy.path.abspath(self.filepath))
+        try:
+            os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as stream:
+                json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                stream.write("\\n")
+        except (OSError, TypeError, ValueError) as exc:
+            self.report({"ERROR"}, "写入资源清单失败：" + str(exc))
+            return {"CANCELLED"}
+
+        warning_count = sum(len(record["warnings"]) for record in records)
+        self.report({"INFO"}, "已导出 %d 个对象的资源清单（%d 条提示）：%s" %
+                    (len(records), warning_count, filepath))
+        return {"FINISHED"}
+
+
 class RH_OT_audit_selected_assets(bpy.types.Operator):
     bl_idname = "rh_studio.audit_selected_assets"
     bl_label = "检查所选资源并生成报告"
@@ -2352,7 +2477,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
+    RH_OT_export_asset_manifest, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
