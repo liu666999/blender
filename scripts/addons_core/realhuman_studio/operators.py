@@ -476,7 +476,8 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         mapping.inputs["Scale"].default_value = (
             self.density * self.scale_x, self.density * self.scale_y, self.density)
         mapping.inputs["Location"].default_value = (self.offset_x, self.offset_y, 0.0)
-        links.new(texcoord.outputs[self.coordinate_source], mapping.inputs["Vector"])
+        coordinate_socket = {"UV": "UV", "OBJECT": "Object", "GENERATED": "Generated"}[self.coordinate_source]
+        links.new(texcoord.outputs[coordinate_socket], mapping.inputs["Vector"])
 
         if self.pattern == "DOTS":
             texture = nodes.new("ShaderNodeTexVoronoi")
