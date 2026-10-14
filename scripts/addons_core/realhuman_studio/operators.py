@@ -568,7 +568,7 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
         for record in report["objects"]:
             if not isinstance(record, dict) or record.get("candidate_status") != "unique_exact_size_match":
                 rejected += 1
-                if record.get("batch_id"):
+                if isinstance(record, dict) and record.get("batch_id"):
                     blocked_batches.add(str(record.get("batch_id")))
                 continue
             batch_id = str(record.get("batch_id", ""))
@@ -581,7 +581,7 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
             exact_candidates = [item for item in candidates if isinstance(item, dict) and item.get("size_match") is True]
             if (not batch_id or not object_name or not old_path or not filename
                     or not isinstance(expected_size, int) or expected_size < 0
-                    or len(exact_candidates) != 1 or len(candidates) != 1):
+                    or len(exact_candidates) != 1):
                 rejected += 1
                 if record.get("batch_id"):
                     blocked_batches.add(str(record.get("batch_id")))
