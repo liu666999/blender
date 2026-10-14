@@ -163,7 +163,11 @@ def run():
         invalid_json_path = os.path.join(tmp, "invalid_action.json")
         with open(invalid_json_path, "w", encoding="utf-8") as stream:
             json.dump({"format": "not_an_action"}, stream)
-        result = bpy.ops.rh_studio.import_action_json(filepath=invalid_json_path)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_json_path)
+        except RuntimeError:
+            # Blender may raise when an operator reports ERROR and returns CANCELLED.
+            result = {"CANCELLED"}
         ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
                "Invalid JSON should be rejected without replacing the current action.")
 
