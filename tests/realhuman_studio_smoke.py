@@ -111,15 +111,30 @@ def run():
 
     ensure("FINISHED" in bpy.ops.rh_studio.apply_pose_preset(preset="ARMS_UP"),
            "Apply pose preset failed.")
+    existing_action = rig.animation_data.action
+    existing_action.name = "Preserve Existing Action"
+    bpy.context.scene.frame_set(1)
+    rig.pose.bones["forearm.R"].scale = (1.0, 1.0, 1.0)
     ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
            "Keyframe insertion failed.")
     ensure(rig.animation_data is not None, "Pose action was not created.")
+    ensure(rig.animation_data.action == existing_action
+           and existing_action.name == "Preserve Existing Action",
+           "Inserting pose keys renamed or replaced an existing Action.")
 
-    # Give the clip a real span, then verify reusable action-set save/load and
-    # that saving a duplicate name never removes an Action used by another rig.
-    bpy.context.scene.frame_set(bpy.context.scene.frame_current + 12)
+    # Give the clip a real span and animate scale as well as location/rotation.
+    # Exact-frame evaluation verifies that the scale channel is actually keyed.
+    bpy.context.scene.frame_set(13)
+    rig.pose.bones["forearm.R"].scale = (1.2, 1.1, 0.9)
     ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
            "Second keyframe insertion failed.")
+    bpy.context.scene.frame_set(13)
+    bpy.context.view_layer.update()
+    scaled_bone = rig.pose.bones["forearm.R"]
+    ensure(abs(scaled_bone.scale.x - 1.2) < 1e-3
+           and abs(scaled_bone.scale.y - 1.1) < 1e-3
+           and abs(scaled_bone.scale.z - 0.9) < 1e-3,
+           "Scale values did not persist at the keyed frame.")
     ensure("FINISHED" in bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion"),
            "Saving a named action set failed.")
     saved_action = bpy.data.actions.get("RH动作集 | CI Motion")
