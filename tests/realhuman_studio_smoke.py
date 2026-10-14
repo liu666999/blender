@@ -360,6 +360,17 @@ def run():
                and scan_asset["rh_studio_source_path"] == old_scan_path
                and after_manifest_bytes == before_manifest_bytes,
                "Batch repair must reject a candidate whose size changed after scanning without mutating data.")
+        repair_results_path = os.path.join(audit_tmp, "logs", "missing_source_repair_results.json")
+        ensure(os.path.isfile(repair_results_path),
+               "Rejected batch repair should still write a per-item result report.")
+        with open(repair_results_path, "r", encoding="utf-8") as stream:
+            changed_candidate_results = json.load(stream)
+        changed_result = next((item for item in changed_candidate_results.get("results", [])
+                               if item.get("object_name") == scan_asset.name), {})
+        ensure(changed_candidate_results.get("schema") == "realhuman_studio_missing_source_repair_results_v1"
+               and changed_result.get("status") == "skipped"
+               and changed_result.get("reason") == "candidate_size_changed_or_mismatched",
+               "Repair results should explain why the changed candidate was skipped.")
         with open(scan_candidate, "wb") as stream:
             stream.write(b"known-size-original")
         result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=scan_report_path)
@@ -375,6 +386,14 @@ def run():
                and os.path.normpath(repaired_entries[0]["source_path"]) == os.path.normpath(scan_candidate)
                and repaired_entries[0].get("recovery_method") == "candidate_report_unique_exact_size",
                "Batch repair did not synchronize project import history.")
+        with open(repair_results_path, "r", encoding="utf-8") as stream:
+            successful_repair_results = json.load(stream)
+        successful_result = next((item for item in successful_repair_results.get("results", [])
+                                  if item.get("object_name") == scan_asset.name), {})
+        ensure(successful_result.get("status") == "repaired"
+               and successful_result.get("reason") == "unique_exact_size_and_project_history_verified"
+               and successful_repair_results.get("summary", {}).get("repaired") == 1,
+               "Successful repair results should record the repaired object and summary.")
         # An ambiguous candidate report must not change object metadata or history.
         ambiguous_report_path = os.path.join(audit_tmp, "ambiguous_candidates.json")
         with open(scan_report_path, "r", encoding="utf-8") as stream:
@@ -397,6 +416,14 @@ def run():
                and scan_asset["rh_studio_source_path"] == repaired_source_path
                and after_ambiguous_manifest == before_ambiguous_manifest,
                "Ambiguous candidate records must be refused without mutating object or history.")
+        with open(repair_results_path, "r", encoding="utf-8") as stream:
+            ambiguous_repair_results = json.load(stream)
+        ambiguous_result = next((item for item in ambiguous_repair_results.get("results", [])
+                                 if item.get("object_name") == scan_asset.name), {})
+        ensure(ambiguous_result.get("status") == "skipped"
+               and ambiguous_result.get("reason") == "candidate_status_not_repairable"
+               and ambiguous_repair_results.get("summary", {}).get("skipped") == 1,
+               "Ambiguous repair report should record a skipped result with an explicit reason.")
         bpy.data.objects.remove(scan_asset, do_unlink=True)
 
         # Relinking repairs metadata only; it must also update the matching history batch atomically.
