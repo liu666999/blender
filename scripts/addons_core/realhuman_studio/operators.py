@@ -953,7 +953,12 @@ class RH_OT_save_action_set(bpy.types.Operator):
         # If the name is already in use, preserve that Action and create a
         # numbered library entry instead of silently breaking other objects.
         target_name = full_name
-        if existing is not None and existing.users > 0:
+        real_users = 0
+        if existing is not None:
+            # A saved Action has a fake user to persist in the .blend file.
+            # Do not mistake that persistence flag for another rig using it.
+            real_users = existing.users - (1 if existing.use_fake_user else 0)
+        if existing is not None and real_users > 0:
             suffix = 2
             while bpy.data.actions.get("%s (%d)" % (full_name, suffix)) is not None:
                 suffix += 1
