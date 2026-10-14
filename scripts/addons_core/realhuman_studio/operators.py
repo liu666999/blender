@@ -469,7 +469,7 @@ class RH_OT_relink_asset_source(bpy.types.Operator):
                 try:
                     with open(temp_path, "w", encoding="utf-8") as stream:
                         json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                        stream.write("\\n")
+                        stream.write("\n")
                     os.replace(temp_path, manifest_path)
                 finally:
                     if os.path.exists(temp_path):
