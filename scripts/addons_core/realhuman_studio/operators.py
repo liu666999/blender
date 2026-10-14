@@ -900,6 +900,133 @@ class RH_OT_load_pose_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+# Named action-set library. Unlike a single pose preset, this stores the full
+# keyed animation Action in the current .blend file for later reuse.
+_ACTION_SET_PREFIX = "RH动作集 | "
+
+
+def _action_set_items(_self, _context):
+    items = []
+    for action in bpy.data.actions:
+        if action.name.startswith(_ACTION_SET_PREFIX):
+            label = action.name[len(_ACTION_SET_PREFIX):]
+            items.append((action.name, label, "已保存的整套关键帧动作"))
+    if not items:
+        items.append(("", "暂无已保存动作集", "先为骨架记录至少一个关键帧，再保存动作集"))
+    return items
+
+
+class RH_OT_save_action_set(bpy.types.Operator):
+    bl_idname = "rh_studio.save_action_set"
+    bl_label = "保存整套动作"
+    bl_description = "Duplicate the active animation Action as a named reusable action set inside this .blend file"
+    bl_options = {"REGISTER", "UNDO"}
+
+    action_set_name: StringProperty(name="动作集名称", default="我的动作集", maxlen=64)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE"
+                    and obj.animation_data and obj.animation_data.action)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=380)
+
+    def execute(self, context):
+        rig = context.active_object
+        source = rig.animation_data.action if rig.animation_data else None
+        if source is None:
+            self.report({"ERROR"}, "当前骨架没有动画关键帧。先摆姿并按 K 或“记录当前姿势关键帧”。")
+            return {"CANCELLED"}
+        label = self.action_set_name.strip()
+        if not label:
+            self.report({"ERROR"}, "动作集名称不能为空。")
+            return {"CANCELLED"}
+        full_name = _ACTION_SET_PREFIX + label
+        existing = bpy.data.actions.get(full_name)
+        if existing is not None:
+            # Replace only the saved library copy, never the action currently
+            # being edited on the rig.
+            if existing == source:
+                self.report({"ERROR"}, "当前正在编辑的动作就是同名动作集；请先改名或复制动画。")
+                return {"CANCELLED"}
+            bpy.data.actions.remove(existing)
+        saved = source.copy()
+        saved.name = full_name
+        saved.use_fake_user = True
+        self.report({"INFO"}, "已保存整套动作“%s”（关键帧随 .blend 文件保存）。" % label)
+        return {"FINISHED"}
+
+
+class RH_OT_load_action_set(bpy.types.Operator):
+    bl_idname = "rh_studio.load_action_set"
+    bl_label = "载入整套动作"
+    bl_description = "Assign a saved named animation Action to the active armature"
+    bl_options = {"REGISTER", "UNDO"}
+
+    action_set: EnumProperty(name="动作集", items=_action_set_items)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE")
+
+    def invoke(self, context, event):
+        if not any(action.name.startswith(_ACTION_SET_PREFIX) for action in bpy.data.actions):
+            self.report({"WARNING"}, "还没有已保存的动作集。")
+            return {"CANCELLED"}
+        return context.window_manager.invoke_props_dialog(self, width=420)
+
+    def execute(self, context):
+        rig = context.active_object
+        action = bpy.data.actions.get(self.action_set)
+        if action is None or not action.name.startswith(_ACTION_SET_PREFIX):
+            self.report({"ERROR"}, "找不到所选动作集；请确认它仍保存在当前 .blend 文件中。")
+            return {"CANCELLED"}
+        rig.animation_data_create()
+        rig.animation_data.action = action
+        start, end = action.frame_range
+        context.scene.frame_set(int(start))
+        context.view_layer.update()
+        self.report({"INFO"}, "已载入动作集“%s”，帧范围 %.0f–%.0f。" %
+                    (action.name[len(_ACTION_SET_PREFIX):], start, end))
+        return {"FINISHED"}
+
+
+class RH_OT_check_action_sequence(bpy.types.Operator):
+    bl_idname = "rh_studio.check_action_sequence"
+    bl_label = "检查动作序列"
+    bl_description = "Check basic animation conditions before playback or export"
+    bl_options = {"REGISTER"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "ARMATURE")
+
+    def execute(self, context):
+        rig = context.active_object
+        action = rig.animation_data.action if rig.animation_data else None
+        if action is None:
+            self.report({"ERROR"}, "动作序列不成立：当前骨架没有绑定动画动作。")
+            return {"CANCELLED"}
+        start, end = action.frame_range
+        if end < start or not math.isfinite(start) or not math.isfinite(end):
+            self.report({"ERROR"}, "动作序列帧范围无效，请检查关键帧。")
+            return {"CANCELLED"}
+        if end - start < 1:
+            self.report({"WARNING"}, "动作序列只有一个时间点；至少再记录一帧才能形成动作。")
+            return {"FINISHED"}
+        if context.scene.frame_current < start or context.scene.frame_current > end:
+            self.report({"WARNING"}, "当前时间帧在动作范围之外（动作范围 %.0f–%.0f）。" % (start, end))
+            return {"FINISHED"}
+        self.report({"INFO"}, "基础检查通过：动作“%s”，帧范围 %.0f–%.0f。此检查不代表已验证动作衔接或网格碰撞。" %
+                    (action.name, start, end))
+        return {"FINISHED"}
+
+
+
 class RH_OT_check_pose_clearance(bpy.types.Operator):
     bl_idname = "rh_studio.check_pose_clearance"
     bl_label = "检查肢体间距 / 重叠风险"
@@ -1383,6 +1510,7 @@ CLASSES = (
     RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
     RH_OT_save_pose_preset, RH_OT_load_pose_preset,
+    RH_OT_save_action_set, RH_OT_load_action_set, RH_OT_check_action_sequence,
     RH_OT_check_pose_clearance, RH_OT_turn_body_preset, RH_OT_body_reaction_preset,
     RH_OT_simple_2d_pose_pad,
 )
