@@ -20,6 +20,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import realhuman_studio
+from realhuman_studio import operators as rh_operators
 
 
 def ensure(condition, message):
@@ -58,6 +59,57 @@ def run():
     realhuman_studio.register()
     ensure(hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties did not register.")
+    # Result viewer filtering and validation are pure helpers, so exercise them in background CI.
+    sample_results = [
+        {"object_name": "A", "status": "repaired"},
+        {"object_name": "B", "status": "skipped"},
+        {"object_name": "C", "status": "failed"},
+        "invalid-record",
+    ]
+    ensure([item["status"] for item in rh_operators.filter_repair_results(sample_results, "ALL")]
+           == ["repaired", "skipped", "failed"],
+           "Repair result viewer ALL filter did not exclude malformed rows.")
+    ensure([item["object_name"] for item in rh_operators.filter_repair_results(sample_results, "skipped")]
+           == ["B"],
+           "Repair result viewer status filter did not isolate skipped records.")
+    ensure(rh_operators.filter_repair_results(sample_results, "repaired")[0]["object_name"] == "A"
+           and rh_operators.filter_repair_results(sample_results, "failed")[0]["object_name"] == "C"
+           and rh_operators.filter_repair_results(sample_results, "unknown") == [],
+           "Repair result viewer repaired/failed/empty filters are incorrect.")
+    viewer_report_path = os.path.join(tempfile.gettempdir(), "rh_studio_viewer_report_test.json")
+    with open(viewer_report_path, "w", encoding="utf-8") as stream:
+        json.dump({
+            "schema": "realhuman_studio_missing_source_repair_results_v1",
+            "summary": {"total": 1, "repaired": 1, "skipped": 0, "failed": 0},
+            "results": [{"object_name": "A", "status": "repaired"}],
+        }, stream)
+    ensure(rh_operators.load_repair_results_report(viewer_report_path)["results"][0]["object_name"] == "A",
+           "Repair result viewer could not load a valid result report.")
+    invalid_viewer_report_path = os.path.join(tempfile.gettempdir(), "rh_studio_viewer_invalid_report_test.json")
+    with open(invalid_viewer_report_path, "w", encoding="utf-8") as stream:
+        json.dump({"schema": "wrong", "results": []}, stream)
+    try:
+        rh_operators.load_repair_results_report(invalid_viewer_report_path)
+    except ValueError:
+        invalid_report_rejected = True
+    else:
+        invalid_report_rejected = False
+    ensure(invalid_report_rejected, "Repair result viewer must reject an unsupported report schema.")
+    try:
+        rh_operators.load_repair_results_report(viewer_report_path + ".missing")
+    except OSError:
+        missing_report_rejected = True
+    else:
+        missing_report_rejected = False
+    ensure(missing_report_rejected, "Repair result viewer should surface missing report files cleanly.")
+    os.remove(viewer_report_path)
+    os.remove(invalid_viewer_report_path)
+
+    copy_test_path = os.path.join(tempfile.gettempdir(), "rh_studio_copy_path_test.obj")
+    ensure("FINISHED" in bpy.ops.rh_studio.copy_repair_result_path(path=copy_test_path),
+           "Copy repair result path operator did not finish.")
+    ensure(bpy.context.window_manager.clipboard == copy_test_path,
+           "Copy repair result path operator did not place the exact path on the clipboard.")
     ensure(hasattr(bpy.ops.rh_studio, "view_missing_source_repair_results")
            and hasattr(bpy.ops.rh_studio, "copy_repair_result_path"),
            "Missing-source repair result viewer/copy operators did not register.")
