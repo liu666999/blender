@@ -346,7 +346,14 @@ def run():
     mesh_matrix_before = bound_mesh.matrix_world.copy()
     rig_matrix_before = bound_rig.matrix_world.copy()
     activate(bound_mesh)
-    result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
+    # Blender's background operator runner raises RuntimeError when an operator
+    # reports ERROR, even when the operator correctly returns CANCELLED.
+    try:
+        result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
+    except RuntimeError as exc:
+        ensure("未选中的绑定骨架" in str(exc),
+               "Group calibration failed for an unexpected reason: %s" % exc)
+        result = {"CANCELLED"}
     ensure("CANCELLED" in result,
            "Group calibration should refuse a bound mesh when its armature is not selected.")
     ensure(all(abs(a - b) < 1e-6
