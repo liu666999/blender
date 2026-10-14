@@ -507,18 +507,39 @@ class RH_OT_fit_height(bpy.types.Operator):
         return context.active_object is not None and context.active_object.type == "MESH"
     def execute(self, context):
         obj = context.active_object
-        current_height = float(obj.dimensions.z)
-        if current_height <= 1e-8:
-            self.report({"ERROR"}, "当前对象高度为零，无法校准。")
+        scene = context.scene
+        unit_settings = scene.unit_settings
+        # Blender dimensions are expressed in Blender units; scale_length converts
+        # one Blender unit to meters. The UI target is explicitly specified in meters.
+        meters_per_blender_unit = float(unit_settings.scale_length) if unit_settings else 1.0
+        if not math.isfinite(meters_per_blender_unit) or meters_per_blender_unit <= 0.0:
+            self.report({"ERROR"}, "场景单位比例无效，无法安全校准。")
             return {"CANCELLED"}
-        factor = self.target_height / current_height
+        current_height = float(obj.dimensions.z)
+        if not math.isfinite(current_height) or current_height <= 1e-8:
+            self.report({"ERROR"}, "当前对象高度为零或无效，无法校准。")
+            return {"CANCELLED"}
+        target_height_bu = float(self.target_height) / meters_per_blender_unit
+        factor = target_height_bu / current_height
+        if not math.isfinite(factor) or factor <= 0.0:
+            self.report({"ERROR"}, "计算出的缩放比例无效，未修改模型。")
+            return {"CANCELLED"}
+
+        # Uniformly scale only the active mesh object. Translate via matrix_world
+        # rather than obj.location so parented meshes are moved along world Z.
         obj.scale = tuple(component * factor for component in obj.scale)
         context.view_layer.update()
         world_corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
         if world_corners:
-            obj.location.z -= min(point.z for point in world_corners)
+            world_matrix = obj.matrix_world.copy()
+            world_matrix.translation.z -= min(point.z for point in world_corners)
+            obj.matrix_world = world_matrix
         context.view_layer.update()
-        self.report({"INFO"}, "身高已校准；请检查模型朝向和场景单位。")
+        actual_height_m = float(obj.dimensions.z) * meters_per_blender_unit
+        self.report(
+            {"INFO"},
+            "当前网格已校准至约 %.3f 米并落地；仅修改活动网格，不会同步缩放骨架或衣物。" % actual_height_m
+        )
         return {"FINISHED"}
 
 class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
