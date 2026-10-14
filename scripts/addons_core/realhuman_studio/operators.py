@@ -1138,6 +1138,9 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
                 payload = json.load(stream)
             if not isinstance(payload, dict) or payload.get("format") != "realhuman_studio_action_v1":
                 raise ValueError("文件格式不属于 RealHuman Studio action_v1。")
+            rotation_representation = payload.get("rotation_representation", "local_quaternion")
+            if rotation_representation != "local_quaternion":
+                raise ValueError("暂不支持该旋转表示方式：" + str(rotation_representation))
             source_fps = payload.get("fps")
             if source_fps is not None:
                 if isinstance(source_fps, bool) or not isinstance(source_fps, (int, float)):
