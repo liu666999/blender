@@ -589,7 +589,65 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
 
         project_root = os.path.abspath(bpy.path.abspath(context.scene.rh_studio_project_root or "//"))
         manifest_path = os.path.join(project_root, "realhuman_project.json")
+        results_path = os.path.join(project_root, "logs", "missing_source_repair_results.json")
+        try:
+            os.makedirs(os.path.dirname(results_path), exist_ok=True)
+        except OSError as exc:
+            self.report({"ERROR"}, "无法创建修复结果目录，未修改任何数据：" + str(exc))
+            return {"CANCELLED"}
+
+        results = []
+        grouped = {}
+        blocked_batches = set()
+
+        def add_result(source, status, reason, candidate_path="", actual_size=None):
+            source = source if isinstance(source, dict) else {}
+            results.append({
+                "object_name": str(source.get("object_name", "")),
+                "batch_id": str(source.get("batch_id", "")),
+                "old_source_path": str(source.get("missing_source_path", "")),
+                "candidate_path": candidate_path or "",
+                "candidate_status": str(source.get("candidate_status", "invalid_record")),
+                "status": status,
+                "reason": reason,
+                "expected_size_bytes": source.get("expected_size_bytes"),
+                "actual_size_bytes": actual_size,
+            })
+            return results[-1]
+
+        def write_results():
+            payload = {
+                "schema": "realhuman_studio_missing_source_repair_results_v1",
+                "application": "RealHuman Studio",
+                "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "candidate_report": report_path,
+                "manifest_path": manifest_path,
+                "summary": {
+                    "total": len(results),
+                    "repaired": sum(item["status"] == "repaired" for item in results),
+                    "skipped": sum(item["status"] == "skipped" for item in results),
+                    "failed": sum(item["status"] == "failed" for item in results),
+                },
+                "results": results,
+            }
+            temp_result_path = results_path + "." + uuid.uuid4().hex + ".tmp"
+            try:
+                with open(temp_result_path, "w", encoding="utf-8") as stream:
+                    json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                    stream.write("\n")
+                os.replace(temp_result_path, results_path)
+                return True
+            except (OSError, TypeError, ValueError) as exc:
+                self.report({"WARNING"}, "修复结果报告写入失败：" + str(exc))
+                return False
+            finally:
+                if os.path.exists(temp_result_path):
+                    os.remove(temp_result_path)
+
         if not os.path.isfile(manifest_path):
+            for source in report["objects"]:
+                add_result(source, "skipped", "project_manifest_missing")
+            write_results()
             self.report({"ERROR"}, "缺少 realhuman_project.json；无法校验导入批次，未修改任何数据。")
             return {"CANCELLED"}
         try:
@@ -598,92 +656,113 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
             if not isinstance(manifest, dict) or not isinstance(manifest.get("asset_sources"), list):
                 raise ValueError("asset_sources 必须是 JSON 数组")
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            for source in report["objects"]:
+                add_result(source, "failed", "project_manifest_invalid")
+            write_results()
             self.report({"ERROR"}, "项目清单无效，未修改任何数据：" + str(exc))
             return {"CANCELLED"}
 
         entries = manifest["asset_sources"]
-        grouped = {}
-        rejected = 0
-        blocked_batches = set()
-        for record in report["objects"]:
-            if not isinstance(record, dict) or record.get("candidate_status") != "unique_exact_size_match":
-                rejected += 1
-                if isinstance(record, dict) and record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+        for source in report["objects"]:
+            if not isinstance(source, dict):
+                add_result(source, "skipped", "invalid_record")
                 continue
-            batch_id = str(record.get("batch_id", ""))
-            object_name = str(record.get("object_name", ""))
-            old_path = str(record.get("missing_source_path", ""))
-            filename = str(record.get("filename", ""))
-            extension = str(record.get("extension", "")).lower()
-            expected_size = record.get("expected_size_bytes")
-            candidates = record.get("candidates", [])
-            exact_candidates = [item for item in candidates if isinstance(item, dict) and item.get("size_match") is True]
+            if source.get("candidate_status") != "unique_exact_size_match":
+                add_result(source, "skipped", "candidate_status_not_repairable")
+                if source.get("batch_id"):
+                    blocked_batches.add(str(source.get("batch_id")))
+                continue
+            batch_id = str(source.get("batch_id", ""))
+            object_name = str(source.get("object_name", ""))
+            old_path = str(source.get("missing_source_path", ""))
+            filename = str(source.get("filename", ""))
+            extension = str(source.get("extension", "")).lower()
+            expected_size = source.get("expected_size_bytes")
+            candidates = source.get("candidates", [])
+            exact_candidates = [item for item in candidates if isinstance(item, dict) and item.get("size_match") is True] if isinstance(candidates, list) else []
             if (not batch_id or not object_name or not old_path or not filename
-                    or not isinstance(expected_size, int) or expected_size < 0
+                    or not isinstance(expected_size, int) or isinstance(expected_size, bool) or expected_size < 0
                     or len(exact_candidates) != 1):
-                rejected += 1
-                if record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+                add_result(source, "skipped", "record_fields_or_candidate_invalid")
+                if batch_id:
+                    blocked_batches.add(batch_id)
                 continue
             candidate = exact_candidates[0]
             target = os.path.normpath(os.path.abspath(str(candidate.get("path", ""))))
             old_abs = os.path.normpath(os.path.abspath(bpy.path.abspath(old_path)))
             obj = bpy.data.objects.get(object_name)
-            if obj is None or str(obj.get("rh_studio_import_batch_id", "")) != batch_id:
-                rejected += 1
-                if record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+            if obj is None:
+                add_result(source, "skipped", "object_not_found", target)
+                blocked_batches.add(batch_id)
+                continue
+            if str(obj.get("rh_studio_import_batch_id", "")) != batch_id:
+                add_result(source, "skipped", "object_batch_id_mismatch", target)
+                blocked_batches.add(batch_id)
                 continue
             current_source = str(obj.get("rh_studio_source_path", ""))
             current_abs = os.path.normpath(os.path.abspath(bpy.path.abspath(current_source))) if current_source else ""
-            if current_abs != old_abs or os.path.isfile(current_abs):
-                rejected += 1
-                if record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+            if current_abs != old_abs:
+                add_result(source, "skipped", "object_source_path_changed_since_scan", target)
+                blocked_batches.add(batch_id)
+                continue
+            if os.path.isfile(current_abs):
+                add_result(source, "skipped", "original_source_is_no_longer_missing", target)
+                blocked_batches.add(batch_id)
                 continue
             if (os.path.basename(target).casefold() != filename.casefold()
                     or Path(target).suffix.lower() != extension
-                    or Path(filename).suffix.lower() != extension
-                    or not os.path.isfile(target)):
-                rejected += 1
-                if record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+                    or Path(filename).suffix.lower() != extension):
+                add_result(source, "skipped", "candidate_filename_or_extension_mismatch", target)
+                blocked_batches.add(batch_id)
+                continue
+            if not os.path.isfile(target):
+                add_result(source, "skipped", "candidate_file_missing", target)
+                blocked_batches.add(batch_id)
                 continue
             try:
                 target_size = os.path.getsize(target)
             except OSError:
-                rejected += 1
-                if record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+                add_result(source, "skipped", "candidate_file_stat_failed", target)
+                blocked_batches.add(batch_id)
                 continue
-            if (target_size != expected_size or candidate.get("size_bytes") != expected_size
-                    or candidate.get("size_match") is not True):
-                rejected += 1
-                if record.get("batch_id"):
-                    blocked_batches.add(str(record.get("batch_id")))
+            if target_size != expected_size or candidate.get("size_bytes") != expected_size or candidate.get("size_match") is not True:
+                add_result(source, "skipped", "candidate_size_changed_or_mismatched", target, target_size)
+                blocked_batches.add(batch_id)
                 continue
             grouped.setdefault(batch_id, []).append({
-                "object": obj, "old_path": current_source, "old_abs": old_abs,
-                "target": target, "expected_size": expected_size,
+                "source": source, "object": obj, "old_path": current_source,
+                "old_abs": old_abs, "target": target, "expected_size": expected_size,
+                "result": results[-1] if results else None,
             })
+            # This source is pending validation; its final status is assigned below.
+            results.append({
+                "object_name": object_name, "batch_id": batch_id,
+                "old_source_path": old_path, "candidate_path": target,
+                "candidate_status": str(source.get("candidate_status", "")),
+                "status": "pending", "reason": "awaiting_batch_history_validation",
+                "expected_size_bytes": expected_size, "actual_size_bytes": target_size,
+            })
+            grouped[batch_id][-1]["result"] = results[-1]
 
-        # A batch is repairable only if its history is unique and all records in
-        # that batch agree on the same original and replacement paths.
-        approved = []
         batch_entry_by_id = {}
+        approved = []
         for batch_id, records in grouped.items():
             if batch_id in blocked_batches:
-                rejected += len(records)
+                for item in records:
+                    item["result"].update(status="skipped", reason="another_record_in_batch_was_rejected")
                 continue
-            matching = [entry for entry in entries
-                        if isinstance(entry, dict) and str(entry.get("batch_id", "")) == batch_id]
+            matching = [entry for entry in entries if isinstance(entry, dict) and str(entry.get("batch_id", "")) == batch_id]
             targets = {record["target"] for record in records}
             old_paths = {os.path.normcase(record["old_abs"]) for record in records}
             sizes = {record["expected_size"] for record in records}
             names = {record["object"].name for record in records}
-            if len(matching) != 1 or len(targets) != 1 or len(old_paths) != 1 or len(sizes) != 1:
-                rejected += len(records)
+            if len(matching) != 1:
+                for item in records:
+                    item["result"].update(status="skipped", reason="project_history_batch_not_unique")
+                continue
+            if len(targets) != 1 or len(old_paths) != 1 or len(sizes) != 1:
+                for item in records:
+                    item["result"].update(status="skipped", reason="batch_records_disagree_on_paths_or_size")
                 continue
             entry = matching[0]
             entry_source = str(entry.get("source_path", ""))
@@ -691,48 +770,50 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
             if (os.path.normcase(entry_abs) not in old_paths
                     or entry.get("source_size_bytes") != next(iter(sizes))
                     or not isinstance(entry.get("objects"), list)):
-                rejected += len(records)
+                for item in records:
+                    item["result"].update(status="skipped", reason="project_history_source_or_size_mismatch")
                 continue
-            history_names = {
-                item.get("name") for item in entry["objects"] if isinstance(item, dict)
-            }
+            history_names = {item.get("name") for item in entry["objects"] if isinstance(item, dict)}
             if not names.issubset(history_names):
-                rejected += len(records)
+                for item in records:
+                    item["result"].update(status="skipped", reason="object_missing_from_project_history")
                 continue
             approved.extend(records)
             batch_entry_by_id[batch_id] = entry
 
         target_to_batches = {}
         for batch_id, records in grouped.items():
-            for record in records:
-                target_to_batches.setdefault(os.path.normcase(record["target"]), set()).add(batch_id)
+            for item in records:
+                target_to_batches.setdefault(os.path.normcase(item["target"]), set()).add(batch_id)
         conflicting_targets = {path for path, batches in target_to_batches.items() if len(batches) > 1}
         if conflicting_targets:
-            keep = []
             conflicted_batches = set()
             for batch_id, records in grouped.items():
-                if any(os.path.normcase(record["target"]) in conflicting_targets for record in records):
+                if any(os.path.normcase(item["target"]) in conflicting_targets for item in records):
                     conflicted_batches.add(batch_id)
-                    rejected += len(records)
-            approved = [record for record in approved
-                        if str(record["object"].get("rh_studio_import_batch_id", "")) not in conflicted_batches]
+                    for item in records:
+                        item["result"].update(status="skipped", reason="candidate_claimed_by_multiple_batches")
+            approved = [item for item in approved
+                        if str(item["object"].get("rh_studio_import_batch_id", "")) not in conflicted_batches]
             for batch_id in conflicted_batches:
                 batch_entry_by_id.pop(batch_id, None)
 
         if not approved:
-            self.report({"WARNING"}, "没有可安全应用的修复。跳过 %d 条记录；对象和项目清单均未修改。" % rejected)
+            write_results()
+            skipped = sum(item["status"] == "skipped" for item in results)
+            self.report({"WARNING"}, "没有可安全应用的修复。跳过 %d 条记录；详情已写入 logs/missing_source_repair_results.json。" % skipped)
             return {"CANCELLED"}
 
         now = datetime.now().astimezone().isoformat(timespec="seconds")
         updates_by_batch = {}
-        for record in approved:
-            batch_id = str(record["object"].get("rh_studio_import_batch_id", ""))
-            updates_by_batch.setdefault(batch_id, record)
-        for batch_id, record in updates_by_batch.items():
+        for item in approved:
+            batch_id = str(item["object"].get("rh_studio_import_batch_id", ""))
+            updates_by_batch.setdefault(batch_id, item)
+        for batch_id, item in updates_by_batch.items():
             entry = batch_entry_by_id[batch_id]
-            stat = os.stat(record["target"])
+            stat = os.stat(item["target"])
             entry["relinked_from"] = entry.get("source_path", "")
-            entry["source_path"] = record["target"]
+            entry["source_path"] = item["target"]
             entry["source_size_bytes"] = stat.st_size
             entry["source_mtime"] = datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds")
             entry["relinked_at"] = now
@@ -745,17 +826,27 @@ class RH_OT_apply_missing_source_repairs(bpy.types.Operator):
                 stream.write("\n")
             os.replace(temp_path, manifest_path)
         except (OSError, TypeError, ValueError) as exc:
-            self.report({"ERROR"}, "项目清单更新失败，未修改对象路径：" + str(exc))
+            for item in approved:
+                item["result"].update(status="failed", reason="manifest_write_failed: " + str(exc))
+            write_results()
+            self.report({"ERROR"}, "项目清单更新失败，未修改对象路径；详情已尝试写入修复结果报告：" + str(exc))
             return {"CANCELLED"}
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-        for record in approved:
-            record["object"]["rh_studio_source_path"] = record["target"]
-            record["object"]["rh_studio_relinked_at"] = now
-        self.report({"INFO"}, "已修复 %d 个对象、同步 %d 个导入批次；跳过 %d 条待人工处理记录。只更新路径元数据，未重新导入几何。" %
-                    (len(approved), len(updates_by_batch), rejected))
+        for item in approved:
+            item["object"]["rh_studio_source_path"] = item["target"]
+            item["object"]["rh_studio_relinked_at"] = now
+            item["result"].update(status="repaired", reason="unique_exact_size_and_project_history_verified")
+        report_written = write_results()
+        repaired_count = len(approved)
+        skipped_count = sum(item["status"] == "skipped" for item in results)
+        message = "已修复 %d 个对象、同步 %d 个导入批次；跳过 %d 条。结果报告：%s" % (
+            repaired_count, len(updates_by_batch), skipped_count, results_path)
+        if not report_written:
+            message += "（但结果报告写入失败）"
+        self.report({"INFO"}, message)
         return {"FINISHED"}
 
 
