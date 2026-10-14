@@ -347,7 +347,10 @@ def run():
         second_asset["rh_studio_import_batch_id"] = "different-batch"
         activate(broken_asset)
         second_asset.select_set(True)
-        result = bpy.ops.rh_studio.relink_asset_source(filepath=relink_source)
+        try:
+            result = bpy.ops.rh_studio.relink_asset_source(filepath=relink_source)
+        except RuntimeError:
+            result = {"CANCELLED"}
         ensure("CANCELLED" in result
                and broken_asset["rh_studio_source_path"] == os.path.normpath(relink_source),
                "Relink should reject mixed batches without mutating source paths.")
