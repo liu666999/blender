@@ -1135,9 +1135,16 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
                 payload = json.load(stream)
             if not isinstance(payload, dict) or payload.get("format") != "realhuman_studio_action_v1":
                 raise ValueError("文件格式不属于 RealHuman Studio action_v1。")
+            source_fps = payload.get("fps")
+            if source_fps is not None:
+                if isinstance(source_fps, bool) or not isinstance(source_fps, (int, float)):
+                    raise ValueError("动作 FPS 元数据无效。")
+                source_fps = float(source_fps)
+                if not math.isfinite(source_fps) or source_fps <= 0.0 or source_fps > 1000.0:
+                    raise ValueError("动作 FPS 必须是 0 到 1000 之间的有限正数。")
             frames = payload.get("frames")
             if not isinstance(frames, list) or not frames or len(frames) > 5000:
-                raise ValueError("动作帧数据为空或超过 5001 个采样点。")
+                raise ValueError("动作帧数据为空或超过 5000 个采样点。")
             validated = []
             available_bones = {bone.name for bone in rig.pose.bones}
             matched_bones = set()
@@ -1222,6 +1229,15 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
         finally:
             scene.frame_set(original_frame)
             context.view_layer.update()
+        if source_fps is not None:
+            scene_fps = scene.render.fps / max(scene.render.fps_base, 1e-8)
+            if abs(source_fps - scene_fps) > 0.01:
+                self.report(
+                    {"WARNING"},
+                    "动作源帧率 %.3g FPS，当前场景 %.3g FPS；未自动改帧率，请确认播放速度。" %
+                    (source_fps, scene_fps))
+            else:
+                self.report({"INFO"}, "动作源帧率与当前场景一致（%.3g FPS）。" % scene_fps)
         self.report({"INFO"}, "已导入动作 JSON，匹配 %d 根骨骼、%d 个采样帧。" %
                     (len(matched_bones), len(validated)))
         return {"FINISHED"}
