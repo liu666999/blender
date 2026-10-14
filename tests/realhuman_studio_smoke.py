@@ -254,6 +254,31 @@ def run():
                and "non_manifold_edges" in audited["mesh"],
                "Asset audit omitted UV or topology diagnostics.")
 
+    # Position normalization should center the selected group and place its bounds on Z=0
+    # without applying transforms or mutating mesh coordinates.
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(3.0, 4.0, 2.0))
+    normalize_cube = bpy.context.object
+    mesh_coords_before = [tuple(vertex.co) for vertex in normalize_cube.data.vertices]
+    scale_before = tuple(normalize_cube.scale)
+    activate(normalize_cube)
+    result = bpy.ops.rh_studio.normalize_selected_assets()
+    ensure("FINISHED" in result, "Asset position normalization operator failed.")
+    bpy.context.view_layer.update()
+    world_corners = [normalize_cube.matrix_world @ Vector(corner)
+                     for corner in normalize_cube.bound_box]
+    bounds_min = [min(point[i] for point in world_corners) for i in range(3)]
+    bounds_max = [max(point[i] for point in world_corners) for i in range(3)]
+    ensure(abs((bounds_min[0] + bounds_max[0]) * 0.5) < 1e-5
+           and abs((bounds_min[1] + bounds_max[1]) * 0.5) < 1e-5
+           and abs(bounds_min[2]) < 1e-5,
+           "Asset normalization did not center X/Y and align the bottom to Z=0.")
+    ensure(tuple(normalize_cube.scale) == scale_before
+           and [tuple(vertex.co) for vertex in normalize_cube.data.vertices] == mesh_coords_before,
+           "Asset normalization unexpectedly changed scale or mesh coordinates.")
+    ensure(normalize_cube.get("rh_studio_position_normalized") is True,
+           "Asset normalization metadata was not recorded.")
+    bpy.data.objects.remove(normalize_cube, do_unlink=True)
+
     # Validate the project folder scaffolding and manifest in a temporary folder.
     with tempfile.TemporaryDirectory(prefix="rh_studio_ci_") as tmp:
         result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
