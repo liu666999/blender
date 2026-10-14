@@ -1,0 +1,63 @@
+# RealHuman Studio — Implementation Audit
+
+**Audit date:** 2026-10-14  
+**Source branch:** `feature/realhuman-studio-phase1`  
+**Scope:** Source-level review of `scripts/addons_core/realhuman_studio/`, the smoke-test script, and the workflow. This is not a claim that a full Blender GUI session or a Windows build has been tested.
+
+## Status legend
+
+- **Implemented in source:** an operator or UI path exists in the checked-in code.
+- **Headless smoke coverage:** the CI script exercises the path through Blender's Python API.
+- **Needs visual/manual validation:** behavior depends on actual geometry, user interaction, GPU drawing, or deformation quality.
+- **Not implemented:** no complete implementation was found in this phase.
+
+## Implemented in source
+
+| Area | Status | Notes |
+|---|---|---|
+| Project folders and JSON manifest | Implemented; smoke-tested | Creates models, anatomy, clothing, textures, exports, logs and `realhuman_project.json`. |
+| Asset import and category collections | Implemented in source | Supports OBJ, FBX, GLB/GLTF, STL and PLY when the matching importer exists in the Blender build. |
+| Category selection, visibility and reassignment | Implemented in source | Uses Blender collections and object metadata. |
+| Height calibration | Implemented in source | Uniform scaling and bottom-to-Z=0 adjustment; not anatomy-aware proportion editing. |
+| Shape-key controls and reset | Implemented in source | Controls shape keys already present in the imported mesh. |
+| GLB, FBX and OBJ export | Implemented in source | Depends on the exporter operator being available in the build. |
+| Procedural fabric print | Implemented; shader construction smoke-tested | UV-based dots, stripes or checker pattern; not a library of real cloth textures. |
+| Bounding-box-based simple humanoid rig | Implemented; rig-generation smoke-tested | Optional automatic weights; final deformation quality is not certified by headless tests. |
+| Starter poses and keyframe insertion | Implemented; smoke-tested | Uses Blender armature pose channels and the current timeline frame. |
+| Named single-pose presets | Implemented; smoke-tested | Stored in the current scene as JSON custom data. |
+| Named full-action sets | Implemented in source; smoke test added | Duplicates an animation Action in the current .blend file. When a same-named saved Action is still used by another object, the save path now creates a numbered copy rather than deleting that shared Action. |
+| Basic action-sequence checks | Implemented in source; smoke test added | Checks Action existence, frame range, one-frame clips and current-frame range; it does not judge animation quality. |
+| Standard views and body-facing presets | Implemented in source; smoke-tested | GUI context and actual view orientation still need manual checks. |
+| Simple limb-clearance warning | Implemented in source; smoke-tested | A small set of bone-point distance heuristics, not mesh collision detection. |
+| Shape-key-based expression/body reactions | Implemented in source | Requires imported models to contain suitably named shape keys; it does not create facial anatomy or muscles. |
+| Minimal 2D stick-pose overlay | Implemented in source | Circle head, simple body/limbs and four draggable endpoints; the interactive modal overlay requires GUI testing. |
+
+## Not implemented or still incomplete
+
+- No bundled production-ready human base mesh, realistic skin material/texture library, anatomy meshes, or complete asset catalog.
+- No procedural human generator with proportion-driven body parameters, muscle/fat controls, or anatomical retopology.
+- No complete anatomy simulation: toggles organize imported assets but do not generate bones, muscles, nerves, vessels, or organs.
+- No robust garment pattern drafting, region painting, decal placement by 3D coordinates, or clothing simulation system. Current fabric print is a material helper.
+- No true 2D-to-3D inverse kinematics, joint-length solving, motion retargeting, contact-aware animation, or reliable mesh-collision solving.
+- No visual quality guarantee for automatic skin weights, facial expressions, anatomical alignment, or mesh deformation.
+- No standalone application shell, installer, Windows executable/package, custom scripting console, or full Python-like project execution environment beyond Blender's existing facilities.
+- No third-party anatomy asset import pipeline with automated license review, normalized naming, unit conversion, and coordinate-system alignment.
+
+## Known risks and manual validation checklist
+
+1. Run the latest GitHub Actions workflow and confirm the Blender runtime smoke test reaches its explicit PASS marker.
+2. In the actual GUI, register the add-on and check that the RealHuman sidebar draws without errors.
+3. Generate a rig from a representative human mesh; inspect bone positions, parenting, roll, and any automatic-weight deformation.
+4. Test the 2D pose overlay from the sidebar in front, side, and perspective views; drag every endpoint, navigate with middle mouse/wheel, record multiple frames, and play the result back.
+5. Save, close, and reopen a .blend file; confirm named pose presets and action sets remain available.
+6. Test action-set name collisions with two rigs, confirm the existing shared Action remains assigned, and check frame playback after loading.
+7. Check shader appearance on meshes with and without UV maps and verify exports in a separate viewer.
+8. Test asset importers/exporters individually in the exact Blender build intended for daily use.
+
+## Test interpretation
+
+The headless smoke script exercises Python API paths, not real mouse input, GPU overlay rendering, visual rig quality, or Windows packaging. A successful smoke test is necessary but not sufficient for release readiness. Items marked as source-implemented must not be interpreted as visually verified unless a GUI test has actually been performed.
+
+## Current recommendation
+
+Continue in small, testable increments: first establish repeatable smoke-test success and GUI validation for rigging, pose-pad interaction, and action-set persistence; then develop the missing body parameter system and clothing/anatomy workflows. Keep bundled third-party assets as a separate, license-reviewed milestone.
