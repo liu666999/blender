@@ -425,6 +425,32 @@ def run():
         ensure(manifest.get("application") == "RealHuman Studio",
                "Project manifest content is unexpected.")
 
+        # A successful asset import should append a traceable batch without
+        # discarding the project's existing manifest fields.
+        project_dir = os.path.join(tmp, "SmokeTest")
+        source_path = os.path.join(tmp, "ci_source_asset.fbx")
+        with open(source_path, "wb") as stream:
+            stream.write(b"fake source bytes for history metadata test")
+        batch_id = "ci-import-batch-001"
+        imported_at = "2026-10-14T12:00:00+00:00"
+        history_ok, history_result = realhuman_studio.operators.record_project_import(
+            bpy.context.scene, source_path, "CLOTHING", [garment],
+            batch_id, imported_at)
+        ensure(history_ok, "Project import history append failed: %s" % history_result)
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            project_payload = json.load(stream)
+        ensure(project_payload.get("application") == "RealHuman Studio"
+               and len(project_payload.get("asset_sources", [])) == 1,
+               "Import history append discarded project metadata or missed the batch.")
+        imported_batch = project_payload["asset_sources"][0]
+        ensure(imported_batch.get("batch_id") == batch_id
+               and imported_batch.get("category") == "CLOTHING"
+               and imported_batch.get("source_path") == os.path.normpath(os.path.abspath(source_path))
+               and imported_batch.get("source_size_bytes") == os.path.getsize(source_path)
+               and imported_batch.get("object_count") == 1
+               and imported_batch.get("objects", [{}])[0].get("name") == garment.name,
+               "Import history batch metadata is incomplete or inaccurate.")
+
         # Verify the portable action JSON round-trip against a second rig.
         # This bone uses Euler keys intentionally: export must serialize the
         # effective local rotation, not a stale rotation_quaternion property.
