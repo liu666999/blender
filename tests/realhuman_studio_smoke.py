@@ -306,6 +306,52 @@ def run():
                        for warning in project_audit.get("project_history", {}).get("warnings", []))
                and project_audit.get("object_count", 0) >= 1,
                "Project audit missed broken links or project history inconsistencies.")
+        # Relinking repairs metadata only; it must also update the matching history batch atomically.
+        relink_source = os.path.join(audit_tmp, "recovered_original.fbx")
+        with open(relink_source, "wb") as stream:
+            stream.write(b"recovered source file")
+        project_manifest_path = os.path.join(audit_tmp, "realhuman_project.json")
+        with open(project_manifest_path, "r", encoding="utf-8") as stream:
+            relink_manifest = json.load(stream)
+        relink_manifest["asset_sources"].append({
+            "batch_id": "ci-broken-link-batch",
+            "source_path": broken_asset["rh_studio_source_path"],
+            "source_size_bytes": 10,
+            "objects": [{"name": broken_asset.name, "type": "MESH"}],
+        })
+        with open(project_manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(relink_manifest, stream, ensure_ascii=False, indent=2)
+        broken_asset["rh_studio_import_batch_id"] = "ci-broken-link-batch"
+        activate(broken_asset)
+        result = bpy.ops.rh_studio.relink_asset_source(filepath=relink_source)
+        ensure("FINISHED" in result, "Source-path relink operator failed.")
+        ensure(os.path.normpath(broken_asset["rh_studio_source_path"]) == os.path.normpath(relink_source)
+               and os.path.isfile(broken_asset["rh_studio_source_path"])
+               and broken_asset.get("rh_studio_relinked_at"),
+               "Relink did not update the selected object's source metadata.")
+        with open(project_manifest_path, "r", encoding="utf-8") as stream:
+            relinked_manifest = json.load(stream)
+        matching_batch = [entry for entry in relinked_manifest["asset_sources"]
+                          if entry.get("batch_id") == "ci-broken-link-batch"]
+        ensure(len(matching_batch) == 1
+               and matching_batch[0].get("source_path") == os.path.normpath(relink_source)
+               and matching_batch[0].get("source_size_bytes") == os.path.getsize(relink_source)
+               and matching_batch[0].get("relinked_from")
+               and matching_batch[0].get("relinked_at"),
+               "Relink did not synchronize the import-history source metadata.")
+        # Mixed batches must be rejected before any object's path is mutated.
+        bpy.ops.mesh.primitive_cube_add(size=1.0)
+        second_asset = bpy.context.object
+        second_asset.name = "RH CI Other Batch Asset"
+        second_asset["rh_studio_source_path"] = broken_asset["rh_studio_source_path"]
+        second_asset["rh_studio_import_batch_id"] = "different-batch"
+        activate(broken_asset)
+        second_asset.select_set(True)
+        result = bpy.ops.rh_studio.relink_asset_source(filepath=relink_source)
+        ensure("CANCELLED" in result
+               and broken_asset["rh_studio_source_path"] == os.path.normpath(relink_source),
+               "Relink should reject mixed batches without mutating source paths.")
+        bpy.data.objects.remove(second_asset, do_unlink=True)
         bpy.context.scene.rh_studio_project_root = previous_project_root
     bpy.data.objects.remove(broken_asset, do_unlink=True)
 
