@@ -714,6 +714,59 @@ class RH_OT_apply_pose_preset(bpy.types.Operator):
 
 
 
+class RH_OT_adjust_active_bone(bpy.types.Operator):
+    bl_idname = "rh_studio.adjust_active_bone"
+    bl_label = "微调当前骨骼"
+    bl_description = "Set the active pose bone's local XYZ rotation in degrees and optionally key it"
+    bl_options = {"REGISTER", "UNDO"}
+
+    rotation_x: FloatProperty(name="X 旋转（度）", subtype="ANGLE",
+                              default=0.0, min=math.radians(-360.0), max=math.radians(360.0), precision=2)
+    rotation_y: FloatProperty(name="Y 旋转（度）", subtype="ANGLE",
+                              default=0.0, min=math.radians(-360.0), max=math.radians(360.0), precision=2)
+    rotation_z: FloatProperty(name="Z 旋转（度）", subtype="ANGLE",
+                              default=0.0, min=math.radians(-360.0), max=math.radians(360.0), precision=2)
+    insert_keyframe: BoolProperty(name="应用后记录当前帧", description="Insert a rotation keyframe for this bone on the current frame", default=False)
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.active_object and context.active_object.type == "ARMATURE"
+                    and context.active_pose_bone is not None)
+
+    def invoke(self, context, event):
+        bone = context.active_pose_bone
+        try:
+            euler = bone.matrix_basis.to_euler("XYZ")
+            self.rotation_x, self.rotation_y, self.rotation_z = euler
+        except Exception:
+            self.rotation_x = self.rotation_y = self.rotation_z = 0.0
+        return context.window_manager.invoke_props_dialog(self, width=360)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="骨骼：%s（局部 XYZ 旋转）" % context.active_pose_bone.name)
+        layout.prop(self, "rotation_x")
+        layout.prop(self, "rotation_y")
+        layout.prop(self, "rotation_z")
+        layout.prop(self, "insert_keyframe")
+
+    def execute(self, context):
+        bone = context.active_pose_bone
+        if bone is None:
+            self.report({"ERROR"}, "请在姿势模式中选择一根骨骼。")
+            return {"CANCELLED"}
+        bone.rotation_mode = "XYZ"
+        bone.rotation_euler = (self.rotation_x, self.rotation_y, self.rotation_z)
+        context.view_layer.update()
+        if self.insert_keyframe:
+            frame = context.scene.frame_current
+            bone.keyframe_insert(data_path="rotation_euler", frame=frame, group=bone.name)
+            self.report({"INFO"}, "已调整骨骼「%s」并记录第 %d 帧关键帧。" % (bone.name, frame))
+        else:
+            self.report({"INFO"}, "已调整骨骼「%s」的局部旋转；需要动画时可记录关键帧。" % bone.name)
+        return {"FINISHED"}
+
+
 class RH_OT_toggle_pose_mode(bpy.types.Operator):
     bl_idname = "rh_studio.toggle_pose_mode"
     bl_label = "切换姿势编辑模式"
@@ -1762,7 +1815,7 @@ CLASSES = (
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
-    RH_OT_apply_pose_preset, RH_OT_toggle_pose_mode,
+    RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
     RH_OT_save_pose_preset, RH_OT_load_pose_preset,
     RH_OT_save_action_set, RH_OT_load_action_set,
