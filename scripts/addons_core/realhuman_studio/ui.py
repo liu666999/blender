@@ -40,6 +40,7 @@ class RH_PT_main(bpy.types.Panel):
         assign.category = scene.rh_studio_import_category
         assets.operator("rh_studio.audit_selected_assets", icon="FILE_TEXT", text="检查所选资源并生成 JSON 报告")
         assets.operator("rh_studio.audit_project_assets", icon="VIEWZOOM", text="检查整个项目资源与导入历史")
+        assets.operator("rh_studio.scan_missing_sources", icon="FILEBROWSER", text="扫描缺失资源并预览候选")
         assets.operator("rh_studio.relink_asset_source", icon="FILE_REFRESH", text="重新关联所选资源的原始文件")
         assets.operator("rh_studio.export_asset_manifest", icon="EXPORT", text="导出资源清单（米制 / 绑定 / 网格）")
         assets.operator("rh_studio.diagnose_asset_scale", icon="DRIVER_DISTANCE", text="诊断尺寸 / 可能单位（不修改模型）")
