@@ -171,7 +171,7 @@ class RH_PT_main(bpy.types.Panel):
 
         fabric = layout.box()
         fabric.label(text="服装印花", icon="MATERIAL")
-        fabric.label(text="选择带 UV 的服装网格，可调图案、密度、稀疏度、旋转与颜色。")
+        fabric.label(text="支持 UV / 物体 / 生成坐标、位置与缩放；编辑模式可只给选中面上印花。")
         fabric.operator("rh_studio.create_fabric_print", icon="NODE_MATERIAL", text="创建 / 应用印花材质")
 
         export_box = layout.box()
