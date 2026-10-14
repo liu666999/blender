@@ -1045,7 +1045,7 @@ class RH_OT_export_action_json(bpy.types.Operator, ExportHelper):
         action = rig.animation_data.action
         start, end = action.frame_range
         first, last = math.floor(start), math.ceil(end)
-        if last < first or last - first > 5000:
+        if last < first or last - first + 1 > 5000:
             self.report({"ERROR"}, "动作帧范围无效或超过 5000 帧；请先裁剪动作。")
             return {"CANCELLED"}
         scene = context.scene
@@ -1110,7 +1110,7 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
             if not isinstance(payload, dict) or payload.get("format") != "realhuman_studio_action_v1":
                 raise ValueError("文件格式不属于 RealHuman Studio action_v1。")
             frames = payload.get("frames")
-            if not isinstance(frames, list) or not frames or len(frames) > 5001:
+            if not isinstance(frames, list) or not frames or len(frames) > 5000:
                 raise ValueError("动作帧数据为空或超过 5001 个采样点。")
             validated = []
             available_bones = {bone.name for bone in rig.pose.bones}
