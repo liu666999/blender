@@ -344,6 +344,59 @@ def run():
                "Candidate scan failed to find the unique same-name, same-extension, same-size candidate.")
         ensure(scan_asset["rh_studio_source_path"] == old_scan_path,
                "Candidate scan must not mutate source-path metadata.")
+
+        # A candidate changing after the scan must be rejected without mutation.
+        with open(scan_candidate, "ab") as stream:
+            stream.write(b"-changed")
+        with open(scan_manifest_path, "rb") as stream:
+            before_manifest_bytes = stream.read()
+        try:
+            result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=scan_report_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        with open(scan_manifest_path, "rb") as stream:
+            after_manifest_bytes = stream.read()
+        ensure("CANCELLED" in result
+               and scan_asset["rh_studio_source_path"] == old_scan_path
+               and after_manifest_bytes == before_manifest_bytes,
+               "Batch repair must reject a candidate whose size changed after scanning without mutating data.")
+        with open(scan_candidate, "wb") as stream:
+            stream.write(b"known-size-original")
+        result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=scan_report_path)
+        ensure("FINISHED" in result
+               and os.path.normpath(scan_asset["rh_studio_source_path"]) == os.path.normpath(scan_candidate)
+               and scan_asset.get("rh_studio_relinked_at"),
+               "Confirmed batch repair did not relink the unique exact-size candidate.")
+        with open(scan_manifest_path, "r", encoding="utf-8") as stream:
+            repaired_manifest = json.load(stream)
+        repaired_entries = [entry for entry in repaired_manifest["asset_sources"]
+                            if entry.get("batch_id") == "ci-scan-batch"]
+        ensure(len(repaired_entries) == 1
+               and os.path.normpath(repaired_entries[0]["source_path"]) == os.path.normpath(scan_candidate)
+               and repaired_entries[0].get("recovery_method") == "candidate_report_unique_exact_size",
+               "Batch repair did not synchronize project import history.")
+        # An ambiguous candidate report must not change object metadata or history.
+        ambiguous_report_path = os.path.join(audit_tmp, "ambiguous_candidates.json")
+        with open(scan_report_path, "r", encoding="utf-8") as stream:
+            ambiguous_payload = json.load(stream)
+        for item in ambiguous_payload["objects"]:
+            if item.get("object_name") == scan_asset.name:
+                item["candidate_status"] = "ambiguous_exact_size_matches"
+        with open(ambiguous_report_path, "w", encoding="utf-8") as stream:
+            json.dump(ambiguous_payload, stream, ensure_ascii=False, indent=2)
+        repaired_source_path = scan_asset["rh_studio_source_path"]
+        with open(scan_manifest_path, "rb") as stream:
+            before_ambiguous_manifest = stream.read()
+        try:
+            result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=ambiguous_report_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        with open(scan_manifest_path, "rb") as stream:
+            after_ambiguous_manifest = stream.read()
+        ensure("CANCELLED" in result
+               and scan_asset["rh_studio_source_path"] == repaired_source_path
+               and after_ambiguous_manifest == before_ambiguous_manifest,
+               "Ambiguous candidate records must be refused without mutating object or history.")
         bpy.data.objects.remove(scan_asset, do_unlink=True)
 
         # Relinking repairs metadata only; it must also update the matching history batch atomically.
