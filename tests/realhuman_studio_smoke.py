@@ -279,6 +279,29 @@ def run():
                "Scale diagnosis unexpectedly modified object transforms.")
     bpy.data.objects.remove(scale_cube, do_unlink=True)
 
+    # Height calibration converts the meter target through scene scale_length.
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(1.0, 2.0, 3.0))
+    calibration_cube = bpy.context.object
+    activate(calibration_cube)
+    previous_unit_system = bpy.context.scene.unit_settings.system
+    previous_scale_length = bpy.context.scene.unit_settings.scale_length
+    bpy.context.scene.unit_settings.system = "METRIC"
+    bpy.context.scene.unit_settings.scale_length = 0.01
+    result = bpy.ops.rh_studio.fit_height(target_height=1.75)
+    ensure("FINISHED" in result, "Height calibration failed for a centimeter-scaled scene.")
+    bpy.context.view_layer.update()
+    calibrated_height_m = float(calibration_cube.dimensions.z) * bpy.context.scene.unit_settings.scale_length
+    calibrated_bottom_z = min((calibration_cube.matrix_world @ Vector(corner)).z
+                              for corner in calibration_cube.bound_box) * bpy.context.scene.unit_settings.scale_length
+    ensure(abs(calibrated_height_m - 1.75) < 1e-4,
+           "Height calibration did not honor scene scale_length.")
+    ensure(abs(calibrated_bottom_z) < 1e-4,
+           "Height calibration did not place the mesh bottom at world Z=0.")
+    bpy.data.objects.remove(calibration_cube, do_unlink=True)
+    bpy.context.scene.unit_settings.system = previous_unit_system
+    bpy.context.scene.unit_settings.scale_length = previous_scale_length
+
     # Position normalization should center the selected group and place its bounds on Z=0
     # without applying transforms or mutating mesh coordinates.
     bpy.ops.mesh.primitive_cube_add(size=2.0, location=(3.0, 4.0, 2.0))
