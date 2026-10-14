@@ -22,7 +22,7 @@
 | Shape-key controls and reset | Implemented in source | Controls shape keys already present in the imported mesh. |
 | GLB, FBX and OBJ export | Implemented in source | Depends on the exporter operator being available in the build. |
 | Procedural fabric print | Implemented; shader construction smoke-tested | UV-based dots, stripes or checker pattern; not a library of real cloth textures. |
-| Bounding-box-based simple humanoid rig | Implemented; rig-generation smoke-tested | Optional automatic weights; final deformation quality is not certified by headless tests. |
+| Bounding-box-based simple humanoid rig | Implemented; rig-generation smoke-tested | Dialog exposes hip/knee/shoulder height ratios, shoulder half-width, and arm reach. These remain coarse initial estimates; final deformation quality is not certified by headless tests. |
 | Starter poses and keyframe insertion | Implemented; smoke-tested | Uses Blender armature pose channels and the current timeline frame. |
 | Named single-pose presets | Implemented; smoke-tested | Stored in the current scene as JSON custom data. |
 | Named full-action sets | Implemented in source; smoke test added | Duplicates an animation Action in the current .blend file. When a same-named saved Action is still used by another object, the save path now creates a numbered copy rather than deleting that shared Action. |
