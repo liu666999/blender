@@ -58,7 +58,7 @@ jobs:
               header = source.read()
 
           def macro(name, default=None):
-              match = re.search(r"^#define\\s+" + re.escape(name) + r"\\s+([A-Za-z0-9_]+)", header, re.MULTILINE)
+              match = re.search(r"^#define\s+" + re.escape(name) + r"\s+([A-Za-z0-9_]+)", header, re.MULTILINE)
               if not match:
                   if default is not None:
                       return default
@@ -115,9 +115,9 @@ jobs:
               )
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"version={version}\\n")
-              output.write(f"url={candidates[0]}\\n")
-              output.write(f"cycle={cycle}\\n")
+              output.write(f"version={version}\n")
+              output.write(f"url={candidates[0]}\n")
+              output.write(f"cycle={cycle}\n")
 
           print(f"Source branch version: {version} ({cycle})")
           print(f"Runtime archive: {candidates[0]}")
