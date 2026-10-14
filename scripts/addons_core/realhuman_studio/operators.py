@@ -6,6 +6,7 @@ import math
 import os
 from pathlib import Path
 import bpy
+import bmesh
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Quaternion, Vector
@@ -417,6 +418,14 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
     density: FloatProperty(name="图案密度", description="Higher values create more repeats per UV tile", default=12.0, min=1.0, max=100.0)
     sparsity: FloatProperty(name="稀疏度", description="Higher values leave more base fabric visible", default=0.35, min=0.0, max=0.95, subtype="FACTOR")
     rotation: FloatProperty(name="旋转（度）", default=0.0, min=-180.0, max=180.0, subtype="ANGLE")
+    coordinate_source: EnumProperty(name="坐标来源", items=(
+        ("UV", "UV 贴图", "Use the garment's UV map"),
+        ("OBJECT", "物体坐标", "Place the pattern in object-local 3D coordinates"),
+        ("GENERATED", "生成坐标", "Use normalized generated coordinates")), default="UV")
+    offset_x: FloatProperty(name="位置 X", default=0.0, min=-100.0, max=100.0, precision=3)
+    offset_y: FloatProperty(name="位置 Y", default=0.0, min=-100.0, max=100.0, precision=3)
+    scale_x: FloatProperty(name="横向比例", default=1.0, min=0.01, max=100.0, precision=3)
+    scale_y: FloatProperty(name="纵向比例", default=1.0, min=0.01, max=100.0, precision=3)
     base_color: bpy.props.FloatVectorProperty(name="底布颜色", subtype="COLOR", size=4, min=0.0, max=1.0, default=(0.12, 0.16, 0.22, 1.0))
     print_color: bpy.props.FloatVectorProperty(name="印花颜色", subtype="COLOR", size=4, min=0.0, max=1.0, default=(0.9, 0.72, 0.38, 1.0))
 
@@ -433,6 +442,14 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         layout.prop(self, "density")
         layout.prop(self, "sparsity", slider=True)
         layout.prop(self, "rotation")
+        layout.prop(self, "coordinate_source")
+        row = layout.row(align=True)
+        row.prop(self, "offset_x")
+        row.prop(self, "offset_y")
+        row = layout.row(align=True)
+        row.prop(self, "scale_x")
+        row.prop(self, "scale_y")
+        layout.label(text="编辑模式下只给选中面分配印花；物体模式应用到当前材质槽。")
         layout.prop(self, "base_color")
         layout.prop(self, "print_color")
 
@@ -456,8 +473,10 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         mapping = nodes.new("ShaderNodeMapping")
         mapping.location = (-600, 80)
         mapping.inputs["Rotation"].default_value[2] = self.rotation
-        mapping.inputs["Scale"].default_value = (self.density, self.density, self.density)
-        links.new(texcoord.outputs["UV"], mapping.inputs["Vector"])
+        mapping.inputs["Scale"].default_value = (
+            self.density * self.scale_x, self.density * self.scale_y, self.density)
+        mapping.inputs["Location"].default_value = (self.offset_x, self.offset_y, 0.0)
+        links.new(texcoord.outputs[self.coordinate_source], mapping.inputs["Vector"])
 
         if self.pattern == "DOTS":
             texture = nodes.new("ShaderNodeTexVoronoi")
@@ -490,17 +509,48 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         mix.inputs[1].default_value = self.base_color
         mix.inputs[2].default_value = self.print_color
         links.new(mix.outputs[0], shader.inputs["Base Color"])
+        assigned = 0
+        face_region_count = 0
         for obj in meshes:
-            if not obj.data.materials:
+            if obj.mode == "EDIT":
+                bm = bmesh.from_edit_mesh(obj.data)
+                selected_faces = [face for face in bm.faces if face.select]
+                if not selected_faces:
+                    continue
                 obj.data.materials.append(material)
+                slot_index = len(obj.data.materials) - 1
+                for face in selected_faces:
+                    face.material_index = slot_index
+                bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+                face_region_count += len(selected_faces)
+                assigned += 1
             else:
-                obj.data.materials[obj.active_material_index] = material
+                if not obj.data.materials:
+                    obj.data.materials.append(material)
+                else:
+                    slot_index = min(max(obj.active_material_index, 0), len(obj.data.materials) - 1)
+                    obj.data.materials[slot_index] = material
+                assigned += 1
+        if assigned == 0:
+            if material.users == 0:
+                bpy.data.materials.remove(material)
+            self.report({"WARNING"}, "没有可应用的网格；若在编辑模式，请先选中至少一个面。")
+            return {"CANCELLED"}
         material["rh_studio_material_type"] = "procedural_fabric_print"
         material["rh_studio_pattern"] = self.pattern
         material["rh_studio_density"] = self.density
         material["rh_studio_sparsity"] = self.sparsity
         material["rh_studio_rotation_degrees"] = self.rotation * 57.295779513
-        self.report({"INFO"}, "已为 %d 个网格生成布料印花材质。请确保服装有可用 UV。" % len(meshes))
+        material["rh_studio_coordinate_source"] = self.coordinate_source
+        material["rh_studio_offset_x"] = self.offset_x
+        material["rh_studio_offset_y"] = self.offset_y
+        material["rh_studio_scale_x"] = self.scale_x
+        material["rh_studio_scale_y"] = self.scale_y
+        if face_region_count:
+            message = "已为 %d 个网格的 %d 个选中面应用局部印花。" % (assigned, face_region_count)
+        else:
+            message = "已为 %d 个网格应用印花材质。" % assigned
+        self.report({"INFO"}, message)
         return {"FINISHED"}
 
 
