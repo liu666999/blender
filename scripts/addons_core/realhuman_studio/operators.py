@@ -369,6 +369,128 @@ class RH_OT_export_asset_manifest(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_relink_asset_source(bpy.types.Operator):
+    bl_idname = "rh_studio.relink_asset_source"
+    bl_label = "重新关联原始资源文件"
+    bl_description = "Repair the selected assets' source-file reference and synchronize their import-history batch"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filepath: StringProperty(name="原始资源文件", subtype="FILE_PATH")
+    filter_glob: StringProperty(
+        default="*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        selected = list(context.selected_objects or [])
+        return bool(selected and all(obj.get("rh_studio_source_path") for obj in selected))
+
+    def invoke(self, context, event):
+        selected = list(context.selected_objects or [])
+        old_path = selected[0].get("rh_studio_source_path", "") if selected else ""
+        if old_path:
+            old_abs = bpy.path.abspath(old_path)
+            parent = os.path.dirname(old_abs)
+            if os.path.isdir(parent):
+                self.filepath = parent + os.sep
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        selected = list(context.selected_objects or [])
+        if not selected:
+            self.report({"ERROR"}, "请先选择需要修复原始路径的资源对象。")
+            return {"CANCELLED"}
+        if any(not obj.get("rh_studio_source_path") for obj in selected):
+            self.report({"ERROR"}, "所选对象中有对象没有原始资源路径；请只选择需要重新关联的已导入资源。")
+            return {"CANCELLED"}
+
+        filepath = os.path.abspath(bpy.path.abspath(self.filepath))
+        if not os.path.isfile(filepath):
+            self.report({"ERROR"}, "所选文件不存在或不是普通文件。")
+            return {"CANCELLED"}
+        extension = Path(filepath).suffix.lower()
+        if extension not in SUPPORTED_IMPORTS:
+            self.report({"ERROR"}, "格式不支持。请选择 OBJ、FBX、GLB、GLTF、STL 或 PLY 文件。")
+            return {"CANCELLED"}
+
+        old_paths = [str(obj.get("rh_studio_source_path", "")) for obj in selected]
+        for old_path in old_paths:
+            old_extension = Path(old_path).suffix.lower()
+            if old_extension and old_extension != extension:
+                self.report({"ERROR"}, "新文件扩展名与原始路径不一致；为避免误关联，请选择同格式文件。")
+                return {"CANCELLED"}
+
+        batch_ids = {str(obj.get("rh_studio_import_batch_id", "")) for obj in selected}
+        nonempty_batch_ids = {batch_id for batch_id in batch_ids if batch_id}
+        if len(nonempty_batch_ids) > 1 or (nonempty_batch_ids and "" in batch_ids):
+            self.report({"ERROR"}, "所选对象包含多个导入批次或混合批次；请按同一批次分别重新关联。")
+            return {"CANCELLED"}
+        batch_id = next(iter(nonempty_batch_ids), "")
+
+        scene = context.scene
+        project_root = os.path.abspath(bpy.path.abspath(scene.rh_studio_project_root or "//"))
+        manifest_path = os.path.join(project_root, "realhuman_project.json")
+        manifest = None
+        matching_entries = []
+        if os.path.isfile(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as stream:
+                    manifest = json.load(stream)
+                if not isinstance(manifest, dict):
+                    raise ValueError("项目清单根节点必须是 JSON 对象")
+                entries = manifest.setdefault("asset_sources", [])
+                if not isinstance(entries, list):
+                    raise ValueError("asset_sources 必须是 JSON 数组")
+                if batch_id:
+                    matching_entries = [
+                        entry for entry in entries
+                        if isinstance(entry, dict) and str(entry.get("batch_id", "")) == batch_id
+                    ]
+                    if not matching_entries:
+                        self.report({"ERROR"}, "项目清单中找不到所选对象的导入批次；未修改任何数据。")
+                        return {"CANCELLED"}
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                self.report({"ERROR"}, "无法安全更新项目清单，未修改任何数据：" + str(exc))
+                return {"CANCELLED"}
+
+        try:
+            source_stat = os.stat(filepath)
+            now = datetime.now().astimezone().isoformat(timespec="seconds")
+            if manifest is not None and matching_entries:
+                for entry in matching_entries:
+                    previous = entry.get("source_path", "")
+                    entry["relinked_from"] = previous
+                    entry["source_path"] = filepath
+                    entry["source_size_bytes"] = source_stat.st_size
+                    entry["source_mtime"] = datetime.fromtimestamp(
+                        source_stat.st_mtime).astimezone().isoformat(timespec="seconds")
+                    entry["relinked_at"] = now
+                temp_path = manifest_path + "." + uuid.uuid4().hex + ".tmp"
+                try:
+                    with open(temp_path, "w", encoding="utf-8") as stream:
+                        json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                        stream.write("\\n")
+                    os.replace(temp_path, manifest_path)
+                finally:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+        except (OSError, TypeError, ValueError) as exc:
+            self.report({"ERROR"}, "重新关联失败，项目清单未能安全更新：" + str(exc))
+            return {"CANCELLED"}
+
+        for obj in selected:
+            obj["rh_studio_source_path"] = filepath
+            obj["rh_studio_relinked_at"] = now
+        if manifest is None:
+            self.report({"WARNING"}, "已更新 %d 个对象的原始路径；未找到项目清单，因此导入历史未同步。" % len(selected))
+        elif not batch_id:
+            self.report({"WARNING"}, "已更新 %d 个对象的原始路径；对象缺少批次 ID，无法可靠匹配导入历史。" % len(selected))
+        else:
+            self.report({"INFO"}, "已重新关联 %d 个对象，并同步导入批次 %s 的历史记录。注意：此操作只修复路径元数据，不会重新导入或替换网格。" %
+                        (len(selected), batch_id[:8]))
+        return {"FINISHED"}
+
+
 class RH_OT_audit_project_assets(bpy.types.Operator):
     bl_idname = "rh_studio.audit_project_assets"
     bl_label = "检查整个项目资源"
@@ -2751,7 +2873,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
 
 CLASSES = (
     RH_OT_setup_project, RH_OT_create_layers, RH_OT_import_asset,
-    RH_OT_export_asset_manifest, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
+    RH_OT_export_asset_manifest, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
     RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
