@@ -42,7 +42,17 @@ def activate(obj):
 
 
 def run():
-    ensure(tuple(bpy.app.version) >= (4, 5, 0), "Expected Blender 4.5+ runtime.")
+    expected_text = os.environ.get("RH_STUDIO_EXPECTED_BLENDER_VERSION", "").strip()
+    if expected_text:
+        expected = tuple(int(part) for part in expected_text.split("."))
+        actual = tuple(bpy.app.version[:3])
+        ensure(actual[:2] == expected[:2],
+               "Runtime version %s does not match the source branch series %s." %
+               (".".join(str(part) for part in actual),
+                ".".join(str(part) for part in expected)))
+    else:
+        ensure(tuple(bpy.app.version) >= (5, 4, 0),
+               "Smoke tests target the Blender version used by this source branch (5.4+).")
     realhuman_studio.register()
     ensure(hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties did not register.")
