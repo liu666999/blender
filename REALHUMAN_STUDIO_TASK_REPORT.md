@@ -197,3 +197,11 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 当前尚无这些提交对应的 Blender runtime 结果；不标记为通过。
 
 - 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
+
+## 2026-10-15 补充：动作导入中途失败的故障注入回归（待运行）
+
+- 将动作 JSON 的单次关键帧写入抽成 `_insert_action_json_keyframe` 小函数，正常路径仍调用 Blender 的 `PoseBone.keyframe_insert`。
+- smoke test 临时替换该函数：允许首个关键帧真实写入，第二次调用主动抛错，以覆盖“已经产生部分动作数据后失败”的回滚路径；随后断言原 Action 和全骨架各旋转表示、位置、缩放恢复。
+- 测试使用前面实际导出的 `json_path` fixture；已修正测试路径变量。
+- 提交：源码 acc88d551a8d28f37202009f684726fc66a55977；故障注入测试 cb92fd6985b8875b3f479a3bc43e7e22cb030786；测试路径修正 1775490b240b2af64655deeb38d362f82ca0bf77。
+- 当前没有这些提交对应的 Blender runtime CI 结果，故状态仍为待验证。
