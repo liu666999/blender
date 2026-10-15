@@ -100,14 +100,10 @@ if action_slots is not None and len(action_slots):
          if preferred_identifier and slot.identifier == preferred_identifier),
         None,
     )
-    if expected_slot is None:
-        expected_slot = next(
-            (slot for slot in action_slots
-             if getattr(slot, "target_id_type", "OBJECT") == "OBJECT"),
-            action_slots[0],
-        )
+    ensure(expected_slot is not None,
+           "The saved Action Slot identifier does not resolve after .blend reopen.")
     ensure(rig.animation_data.action_slot == expected_slot,
-           "The reopened rig did not preserve the named Action Slot binding.")
+           "The reopened rig did not preserve the exact named Action Slot binding.")
 ensure(action.frame_range[0] <= 1 and action.frame_range[1] >= 13,
        "Keyed frame range did not survive .blend reopen.")
 bpy.context.scene.frame_set(13)
