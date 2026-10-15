@@ -156,3 +156,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **状态：** 已提交源码和测试，但尚未取得 Blender runtime 结果；真实写入中断路径仍待专门注入故障验证。
 
 - 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
+
+## 审计补充：动作 JSON 部分写入失败路径（待验证）
+
+- 新增 `_insert_action_json_keyframe` 包装点用于可控故障注入，生产路径依旧调用 Blender 的 `keyframe_insert`。
+- 测试在首个关键帧写入后注入异常，检查取消结果、原 Action 与完整骨架姿态回滚。
+- 代码提交 acc88d551a8d28f37202009f684726fc66a55977；测试 cb92fd6985b8875b3f479a3bc43e7e22cb030786；路径修正 1775490b240b2af64655deeb38d362f82ca0bf77。
+- 当前未取得 runtime 结果，且需在目标 Blender 版本验证 orphan Action 清理与 Action Slot 恢复细节。
