@@ -980,6 +980,7 @@ def run():
             for bone in rig_copy.pose.bones
         }
         action_before_write_failure = rig_copy.animation_data.action
+        action_names_before_write_failure = {action.name for action in bpy.data.actions}
         try:
             try:
                 result = bpy.ops.rh_studio.import_action_json(filepath=json_path)
@@ -991,6 +992,10 @@ def run():
                "Injected mid-write failure did not exercise rollback.")
         ensure(rig_copy.animation_data.action == action_before_write_failure,
                "Mid-write failure did not restore the original Action.")
+        leaked_actions = [action.name for action in bpy.data.actions
+                          if action.name not in action_names_before_write_failure and action.users == 0]
+        ensure(not leaked_actions,
+               "Mid-write failure left orphan Actions behind: %s" % leaked_actions)
         for bone in rig_copy.pose.bones:
             expected_pose = pose_before_write_failure[bone.name]
             actual_pose = (
