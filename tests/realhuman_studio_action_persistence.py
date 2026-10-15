@@ -13,7 +13,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import textwrap
 import traceback
 
 import bpy
@@ -70,7 +69,6 @@ def main():
         bpy.ops.wm.save_as_mainfile(filepath=blend_path)
 
         checker = r'''import bpy
-import sys
 
 def ensure(condition, message):
     if not condition:
