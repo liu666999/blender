@@ -64,6 +64,14 @@ def main():
         ensure(action is not None and action.use_fake_user,
                "The named action set is missing or lacks its persistence user.")
         rig.animation_data.action = action
+        # Blender 4.4+ layered Actions require an explicit slot assignment for
+        # keyed values to evaluate on the target ID. Keep the test compatible
+        # with legacy Actions that do not expose slots.
+        action_slots = getattr(action, "slots", None)
+        if action_slots is not None and len(action_slots):
+            rig.animation_data.action_slot = action_slots[0]
+        ensure(action.frame_range[0] <= 1 and action.frame_range[1] >= 13,
+               "Copied action set did not retain its keyed frame range.")
         bpy.context.scene.frame_set(13)
         bpy.context.view_layer.update()
         bpy.ops.wm.save_as_mainfile(filepath=blend_path)
@@ -82,6 +90,13 @@ rig = bpy.data.objects.get("RH Persistence Test Rig")
 ensure(rig is not None and rig.type == "ARMATURE", "Test rig did not survive .blend reopen.")
 ensure(rig.animation_data is not None and rig.animation_data.action == action,
        "The reopened rig is not assigned to the saved named action set.")
+action_slots = getattr(action, "slots", None)
+if action_slots is not None and len(action_slots):
+    # Rebind the copied Action's slot after loading, then verify evaluated
+    # channel values rather than only checking that keyframe data exists.
+    rig.animation_data.action_slot = action_slots[0]
+    ensure(rig.animation_data.action_slot == action_slots[0],
+           "The reopened rig did not bind to the copied Action slot.")
 ensure(action.frame_range[0] <= 1 and action.frame_range[1] >= 13,
        "Keyed frame range did not survive .blend reopen.")
 bpy.context.scene.frame_set(13)
