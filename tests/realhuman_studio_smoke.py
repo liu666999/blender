@@ -962,6 +962,45 @@ def run():
         ensure("CANCELLED" in result and pose_after_rejected_import == pose_before_rejected_import,
                "Rejected action JSON changed the current pose.")
 
+        # Inject a failure after one real keyframe insert, forcing the write-phase rollback path.
+        original_insert = rh_operators._insert_action_json_keyframe
+        inserted_count = {"value": 0}
+        def fail_after_first_keyframe(bone, data_path, frame, group):
+            inserted_count["value"] += 1
+            if inserted_count["value"] > 1:
+                raise RuntimeError("injected keyframe write failure")
+            return original_insert(bone, data_path, frame, group)
+        rh_operators._insert_action_json_keyframe = fail_after_first_keyframe
+        pose_before_write_failure = {
+            bone.name: (
+                tuple(bone.location), bone.rotation_mode,
+                tuple(bone.rotation_quaternion), tuple(bone.rotation_euler),
+                tuple(bone.rotation_axis_angle), tuple(bone.scale),
+            )
+            for bone in rig_copy.pose.bones
+        }
+        action_before_write_failure = rig_copy.animation_data.action
+        try:
+            try:
+                result = bpy.ops.rh_studio.import_action_json(filepath=action_json_path)
+            except RuntimeError:
+                result = {"CANCELLED"}
+        finally:
+            rh_operators._insert_action_json_keyframe = original_insert
+        ensure("CANCELLED" in result and inserted_count["value"] > 1,
+               "Injected mid-write failure did not exercise rollback.")
+        ensure(rig_copy.animation_data.action == action_before_write_failure,
+               "Mid-write failure did not restore the original Action.")
+        for bone in rig_copy.pose.bones:
+            expected_pose = pose_before_write_failure[bone.name]
+            actual_pose = (
+                tuple(bone.location), bone.rotation_mode,
+                tuple(bone.rotation_quaternion), tuple(bone.rotation_euler),
+                tuple(bone.rotation_axis_angle), tuple(bone.scale),
+            )
+            ensure(actual_pose == expected_pose,
+                   "Mid-write failure left pose changes on bone %s." % bone.name)
+
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties were not unregistered.")
