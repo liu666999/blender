@@ -287,6 +287,11 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             key: {item.as_pointer() for item in datablocks}
             for key, datablocks in import_datablocks.items()
         }
+        root_collection_before = bpy.data.collections.get(ROOT_COLLECTION)
+        root_was_scene_linked = bool(
+            root_collection_before
+            and context.scene.collection.children.get(root_collection_before.name)
+        )
         try:
             _call_import_operator(filepath)
             imported = [obj for obj in bpy.data.objects if obj.as_pointer() not in before]
@@ -312,7 +317,7 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                     except (ReferenceError, RuntimeError):
                         pass
             for key in ("actions", "materials", "images", "meshes", "curves",
-                        "armatures", "cameras", "lights", "collections"):
+                        "armatures", "cameras", "lights"):
                 datablocks = import_datablocks[key]
                 for item in list(datablocks):
                     try:
@@ -320,7 +325,26 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                             datablocks.remove(item)
                     except (ReferenceError, RuntimeError):
                         pass
-            self.report({"ERROR"}, "导入失败，已清理本次新增对象及未使用数据块：" + str(exc))
+            # Category setup can create and link collections before a later
+            # metadata step fails. Explicitly unlink newly created collections,
+            # even when they still have users from the scene/root collection.
+            for collection in list(bpy.data.collections):
+                try:
+                    if collection.as_pointer() not in before["collections"]:
+                        bpy.data.collections.remove(collection, do_unlink=True)
+                except (ReferenceError, RuntimeError, TypeError):
+                    pass
+            # If a pre-existing root was originally unlinked from this scene,
+            # restore that relationship after removing transaction-created children.
+            if root_collection_before and not root_was_scene_linked:
+                try:
+                    linked_root = context.scene.collection.children.get(
+                        root_collection_before.name)
+                    if linked_root is not None:
+                        context.scene.collection.children.unlink(linked_root)
+                except (ReferenceError, RuntimeError):
+                    pass
+            self.report({"ERROR"}, "导入失败，已清理本次新增对象、数据块及分类集合：" + str(exc))
             return {"CANCELLED"}
         # Selection/active-object changes are a viewport convenience, not part of
         # the import transaction. A context limitation here must never delete
