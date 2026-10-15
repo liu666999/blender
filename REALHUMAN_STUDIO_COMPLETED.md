@@ -133,3 +133,9 @@
 - 相关提交：1b2e04d2f72570391e51849f4ae6854235b1f2ca、d2cfc4fe16c3038224273ea800ee995d30779772。当前尚无这两个提交对应的 CI 结果。
 
 - 回归测试隔离补充：在验证完元数据保留后，清空测试用导入历史，再运行原有导入批次追加断言；避免测试间状态污染。提交：5d2b0dba115826f6dc8fcb74869f0e29aa8fa9bc，待 CI 验证。
+
+## 动作导入事务保护补充（2026-10-15）
+
+- 动作 JSON 写入阶段异常时，现在恢复原 Action、尽力恢复原 Action Slot，并恢复骨架各骨骼的 location、rotation_mode、quaternion、Euler、axis-angle 与 scale，防止导入中断后姿态半更新。
+- 新增非法动作 JSON 不应改变当前姿态的 smoke 断言。
+- 提交：66306891541d0ddaa33dc8f3fdff8577e5dae7f1、1d110d0456dc2374d5dc8037bcfb60b742f04784；等待 Blender runtime 执行。
