@@ -121,18 +121,26 @@ def record_project_import(scene, filepath, category, objects, batch_id, imported
             "objects": [{"name": obj.name, "type": obj.type} for obj in objects],
         }
         asset_sources.append(entry)
-        temp_path = manifest_path + "." + batch_id + ".tmp"
-        try:
-            with open(temp_path, "w", encoding="utf-8") as stream:
-                json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\n")
-            os.replace(temp_path, manifest_path)
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+        _write_json_atomic(manifest_path, manifest)
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         return False, "项目导入历史写入失败：" + str(exc)
     return True, manifest_path
+
+def _select_imported_objects(context, imported):
+    """Update viewport selection after the import transaction has committed."""
+    for obj in list(context.selected_objects):
+        obj.select_set(False)
+    for obj in imported:
+        try:
+            obj.select_set(True)
+        except RuntimeError:
+            pass
+    try:
+        context.view_layer.objects.active = next(
+            (obj for obj in imported if obj.type == "MESH"), imported[0])
+    except (RuntimeError, StopIteration):
+        pass
+
 
 def _call_import_operator(filepath):
     extension = Path(filepath).suffix.lower()
@@ -293,18 +301,6 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                 obj["rh_studio_imported_at"] = imported_at
             history_saved, history_message = record_project_import(
                 context.scene, filepath, self.category, imported, batch_id, imported_at)
-            for obj in list(context.selected_objects):
-                obj.select_set(False)
-            for obj in imported:
-                try:
-                    obj.select_set(True)
-                except RuntimeError:
-                    pass
-            try:
-                context.view_layer.objects.active = next(
-                    (obj for obj in imported if obj.type == "MESH"), imported[0])
-            except (RuntimeError, StopIteration):
-                pass
         except Exception as exc:
             # Importers may create several datablocks before raising. Remove every
             # object created during this transaction so a failed import does not
@@ -326,10 +322,20 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                         pass
             self.report({"ERROR"}, "导入失败，已清理本次新增对象及未使用数据块：" + str(exc))
             return {"CANCELLED"}
+        # Selection/active-object changes are a viewport convenience, not part of
+        # the import transaction. A context limitation here must never delete
+        # imported objects after the project manifest has already been committed.
+        selection_warning = ""
+        try:
+            _select_imported_objects(context, imported)
+        except Exception as exc:
+            selection_warning = "资源已导入，但自动选择失败：" + str(exc)
         self.report({"INFO"}, "已导入 %d 个对象到「%s」。批次：%s" %
                     (len(imported), CATEGORY_COLLECTIONS[self.category], batch_id[:8]))
         if not history_saved:
             self.report({"WARNING"}, history_message)
+        if selection_warning:
+            self.report({"WARNING"}, selection_warning)
         return {"FINISHED"}
 
 class RH_OT_export_asset_manifest(bpy.types.Operator):
