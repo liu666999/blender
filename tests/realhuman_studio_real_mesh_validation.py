@@ -151,7 +151,7 @@ try:
 finally:
     for key in blocks:
         key.value = original_values.get(key.name, 0.0)
-    shape_keys.key_blocks.active_index = original_active_index
+    obj.active_shape_key_index = original_active_index
     bpy.context.view_layer.update()
 
 output_path = bpy.path.abspath("//realhuman_studio_real_mesh_validation.json")
@@ -165,4 +165,4 @@ for item in report["controls"]:
     print("%s: negative max delta %.6g; positive max delta %.6g" %
           (item["name"],
            item["negative_extreme"]["max_displacement_from_reference"],
-           item["positive_extreme"]["max_displacement_from_basis"]))
+           item["positive_extreme"]["max_displacement_from_reference"]))
