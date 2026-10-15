@@ -187,3 +187,11 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - **验证状态：仅提交源码与测试，尚未取得新 Actions 结果，不能宣称测试通过。**
 
 - 后续测试隔离修正：新增保护用例结束后，将清单恢复为空导入历史状态，避免与后续“追加一条导入记录”的旧断言互相干扰。提交：5d2b0dba115826f6dc8fcb74869f0e29aa8fa9bc。该修正同样尚无 runtime 结果。
+
+## 2026-10-15 补充：动作 JSON 导入失败时的姿态回滚（待运行验证）
+
+- 审查动作 JSON 导入的异常路径，发现写入中途失败时，旧逻辑虽然恢复原 Action，但可能留下部分写入后的骨骼姿态；在原本没有 Action 的情况下尤其明显。
+- 已增加全骨架姿态快照，异常时恢复 location、rotation mode、quaternion、Euler、axis-angle、scale，并尽力恢复原 Action Slot；无用户的临时 Action 会清理。
+- smoke regression 增加非法 JSON 导入前后姿态不变断言。
+- 提交：源码 66306891541d0ddaa33dc8f3fdff8577e5dae7f1；测试 1d110d0456dc2374d5dc8037bcfb60b742f04784。
+- 当前尚无这些提交对应的 Blender runtime 结果；不标记为通过。
