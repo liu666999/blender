@@ -295,14 +295,10 @@ def run():
              if preferred_identifier and slot.identifier == preferred_identifier),
             None,
         )
-        if expected_slot is None:
-            expected_slot = next(
-                (slot for slot in saved_slots
-                 if getattr(slot, "target_id_type", "OBJECT") == "OBJECT"),
-                saved_slots[0],
-            )
+        ensure(expected_slot is not None,
+               "The saved action-set slot identifier does not resolve to a slot in the copied Action.")
         ensure(rig.animation_data.action_slot == expected_slot,
-               "Loading a named action set did not bind its preserved/compatible Action Slot.")
+               "Loading a named action set did not bind the exact preserved Action Slot.")
     action_start = int(saved_action.frame_range[0])
     ensure(bpy.context.scene.frame_current == action_start,
            "Loading an action set did not move the timeline to its first keyed frame.")
