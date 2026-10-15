@@ -210,3 +210,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **修复：** 新增 `_write_json_atomic`，在目标目录创建唯一临时文件，完成 JSON 序列化、flush 与 fsync 后通过 `os.replace` 替换目标，并在失败路径清理临时文件。
 - **回归测试：** 注入序列化异常，断言操作取消、旧文件字节内容不变且无临时文件残留；恢复正常序列化后断言 schema 与导出成功。
 - **状态：** 代码提交 `c95af719c116bfeb42fc14a3f5b5073f618c8849`，测试提交 `8e45299131a897ae26e7fb5d810a6d0ffc7ffcc0`。当前尚无对应 Blender runtime/CI 结果，不能标记通过。
+
+## 2026-10-15 审计补充：动作集保存事务性
+
+- **发现风险：** 旧实现先删除无真实使用者的同名动作集，再复制当前 Action；若复制失败，旧的可复用动作集会丢失。
+- **修复：** 新增 `_copy_action_set_action` seam；先将副本写入唯一暂存名称、设置 fake user 和槽位元数据，再发布新名称。旧条目通过备份名暂存，只有新条目发布成功后才清理；异常时尝试恢复旧名称并删除暂存副本。
+- **回归测试：** 注入复制异常，断言操作取消、旧动作集对象及名称不变，且没有暂存/备份 Action 残留。
+- **状态：** 源码 `868f4265c96f8e26c0a0aef3f23ffb8dfcefb26d`，测试 `e0779a5d588f8f399221e322ed546783fa82f40f`。尚无 Blender runtime/CI 结果。
