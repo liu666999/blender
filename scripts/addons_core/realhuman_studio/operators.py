@@ -3080,7 +3080,10 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
             rig.animation_data.action = old_action
             if old_action is not None and old_action_slot is not None:
                 try:
-                    if old_action.slots.get(old_action_slot.identifier) is not None:
+                    if any(
+                        slot.identifier == old_action_slot.identifier
+                        for slot in old_action.slots
+                    ):
                         rig.animation_data.action_slot = old_action_slot
                 except (AttributeError, ReferenceError, RuntimeError):
                     # Older Blender versions do not expose Action Slots.
