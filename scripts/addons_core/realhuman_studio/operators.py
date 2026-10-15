@@ -3435,8 +3435,8 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
         self._space = context.area.spaces.active
         width = float(self._view_region.width)
         height = float(self._view_region.height)
-        if width < 240 or height < 220:
-            self.report({"ERROR"}, "3D 视图太小，请先放大视图区域。")
+        if width < 240 or height < 224:
+            self.report({"ERROR"}, "3D 视图太小（至少 240×224），请先放大视图区域。")
             return {"CANCELLED"}
         self._cx, self._cy = _simple_pose_pad_center(width, height)
 
