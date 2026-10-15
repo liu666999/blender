@@ -12,7 +12,6 @@ quality; silhouette, volume preservation, and garment intersections still need G
 """
 import json
 import math
-import os
 from datetime import datetime, timezone
 
 import bpy
@@ -77,7 +76,6 @@ ensure("FINISHED" in result,
 shape_keys = obj.data.shape_keys
 ensure(shape_keys is not None, "No shape-key datablock was created.")
 blocks = shape_keys.key_blocks
-basis = blocks[0]
 original_values = {key.name: float(key.value) for key in blocks}
 original_active_index = shape_keys.key_blocks.active_index
 report = {
@@ -163,6 +161,5 @@ print("Object: %s | vertices: %d | report: %s" %
 for item in report["controls"]:
     print("%s: negative max delta %.6g; positive max delta %.6g" %
           (item["name"],
-           item["controls"]["negative_extreme"]["max_displacement_from_basis"]
-           if "controls" in item else item["negative_extreme"]["max_displacement_from_basis"],
+           item["negative_extreme"]["max_displacement_from_basis"],
            item["positive_extreme"]["max_displacement_from_basis"]))
