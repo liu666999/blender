@@ -189,3 +189,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - 测试此前仅检查“名称新增且 users==0”的 Action，可能漏掉仍有用户引用的残留 Action。
 - 已改为在故障注入前记录所有 Action 的 `as_pointer()`，失败后凡是出现新的 Action 数据块均判定为泄漏，不依赖名称或用户计数。
 - 提交：`0b33c70df8b7b21c9ad3aa501a39b09b847f2b91`。测试仍待实际 Blender runtime 执行。
+
+## 2026-10-15 导出写盘失败保护审计
+
+- 发现原导出直接以 `w` 打开目标 JSON；若序列化中途失败，会截断先前有效文件。
+- 已改为同目录唯一临时文件写入，序列化成功后 `os.replace` 原子替换；异常路径清理临时文件。
+- 新增故障注入测试，模拟 JSON 序列化抛错并检查旧文件不变、临时文件不残留。测试夹具使用有效 JSON 字符串与换行。
+- 实现提交 `1d204c795992133750eeafa30a4d731c241912e9`；测试提交 `b9ecdc75d18d5a31697be5efcc70df1deca6e73e`、`ddba9c7737a1a48769b9cb404eb5fa31971bbe28`。当前仅完成静态复核，Blender runtime 仍待执行。
