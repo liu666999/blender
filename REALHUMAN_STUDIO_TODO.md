@@ -129,3 +129,9 @@
 
 - 另新增 smoke regression：对支持 Action Slot 的版本，暂时解除源骨架的活动槽位后尝试保存同名动作集，要求操作被取消且旧动作集数据块仍保持原样；随后恢复原槽位。提交：`f3ff07b2f69a6bac028a71d99cb8e8cb91d340c3`。
 - 此新增用例仍需 Blender runtime 实际执行；若目标 Blender 不允许把 `action_slot` 设为 `None`，将依据运行日志调整测试构造方式。
+
+## 2026-10-15 新增待验证项：工程清单不可破坏性
+
+- [ ] 在 Blender runtime 执行新增 smoke regression，确认二次初始化不会清空 asset_sources 或自定义元数据。
+- [ ] 确认损坏/不匹配的现有 realhuman_project.json 会被拒绝且原文件保持不变。
+- [ ] 在 CI 实际执行成功后再将此项从待验证改为测试通过。
