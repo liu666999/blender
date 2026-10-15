@@ -2945,8 +2945,22 @@ class RH_OT_export_action_json(bpy.types.Operator, ExportHelper):
             filepath = os.path.abspath(bpy.path.abspath(self.filepath))
             if Path(filepath).suffix.lower() != ".json":
                 filepath = str(Path(filepath).with_suffix(".json"))
-            with open(filepath, "w", encoding="utf-8") as stream:
-                json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+            # Write beside the destination, then atomically replace it. A failed
+            # serialization must not truncate a previously valid export.
+            temporary_path = filepath + ".tmp-" + uuid.uuid4().hex
+            try:
+                with open(temporary_path, "x", encoding="utf-8") as stream:
+                    json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary_path, filepath)
+                temporary_path = None
+            finally:
+                if temporary_path and os.path.exists(temporary_path):
+                    try:
+                        os.remove(temporary_path)
+                    except OSError:
+                        pass
         except Exception as exc:
             self.report({"ERROR"}, "导出动作 JSON 失败：" + str(exc))
             return {"CANCELLED"}
