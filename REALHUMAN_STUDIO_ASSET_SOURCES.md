@@ -24,6 +24,6 @@ Do not treat the bundle's CC0 label as applying to unrelated third-party assets 
 
 ## Status and limitations
 
-The validation helper records mesh topology counts, dimensions, UV layers, materials, modifiers, vertex groups, shape-key displacement counts, and maximum displacement. It is a diagnostic report, not a visual-quality score. Running it creates or updates the four RealHuman Studio shape keys on the selected mesh. Save a copy of the scene first.
+The validation helper records mesh topology counts, dimensions, UV layers, materials, modifiers, vertex groups, and evaluated mesh metrics at each control's negative and positive slider extremes. It restores all shape-key values that were present before the measurements. It is a diagnostic report, not a visual-quality score. Running it creates or updates the four RealHuman Studio shape keys on the selected mesh. Save a copy of the scene first.
 
 **Current status:** source and license candidate identified; automated helper added. The asset has not been downloaded into this environment, and no real-human Blender GUI run has yet been performed. Do not mark real-human deformation quality as passed until the report and screenshots from an actual run are reviewed.
