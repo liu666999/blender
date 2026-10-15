@@ -253,10 +253,23 @@ def run():
            "Saving a duplicate action-set name should safely create a numbered copy.")
     ensure(rig_copy.animation_data.action == saved_action and saved_action.name in bpy.data.actions,
            "Saving a duplicate action set broke an Action used by another rig.")
+    numbered_copy = bpy.data.actions.get("RH动作集 | CI Motion (2)")
+    ensure(numbered_copy is not None and numbered_copy.use_fake_user,
+           "A duplicate action-set name did not create a persistent numbered copy.")
     ensure("FINISHED" in bpy.ops.rh_studio.load_action_set(action_set="RH动作集 | CI Motion"),
            "Loading a named action set failed.")
     ensure(rig.animation_data.action == saved_action,
            "The selected named action set was not assigned to the rig.")
+    action_start = int(saved_action.frame_range[0])
+    ensure(bpy.context.scene.frame_current == action_start,
+           "Loading an action set did not move the timeline to its first keyed frame.")
+    bpy.context.scene.frame_set(13)
+    bpy.context.view_layer.update()
+    loaded_scale = rig.pose.bones["forearm.R"].scale
+    ensure(abs(loaded_scale.x - 1.2) < 1e-3
+           and abs(loaded_scale.y - 1.1) < 1e-3
+           and abs(loaded_scale.z - 0.9) < 1e-3,
+           "Loaded action-set scale channels did not evaluate at their keyed frame.")
     # The minimal 2D pose pad must key scale as well as location/rotation.
     # Use the shared helper directly because a headless test cannot validate the modal GPU overlay.
     bpy.context.scene.frame_set(17)
