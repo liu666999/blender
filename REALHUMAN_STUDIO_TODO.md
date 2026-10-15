@@ -135,3 +135,5 @@
 - [ ] 在 Blender runtime 执行新增 smoke regression，确认二次初始化不会清空 asset_sources 或自定义元数据。
 - [ ] 确认损坏/不匹配的现有 realhuman_project.json 会被拒绝且原文件保持不变。
 - [ ] 在 CI 实际执行成功后再将此项从待验证改为测试通过。
+
+- [ ] 回归用例隔离已修正（提交 5d2b0dba115826f6dc8fcb74869f0e29aa8fa9bc），仍需 runtime 实际执行确认。
