@@ -263,7 +263,22 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
         if Path(filepath).suffix.lower() not in SUPPORTED_IMPORTS:
             self.report({"ERROR"}, "格式不支持。支持 OBJ、FBX、GLB、GLTF、STL、PLY。")
             return {"CANCELLED"}
-        before = {obj.as_pointer() for obj in bpy.data.objects}
+        import_datablocks = {
+            "objects": bpy.data.objects,
+            "meshes": bpy.data.meshes,
+            "curves": bpy.data.curves,
+            "armatures": bpy.data.armatures,
+            "materials": bpy.data.materials,
+            "images": bpy.data.images,
+            "collections": bpy.data.collections,
+            "cameras": bpy.data.cameras,
+            "lights": bpy.data.lights,
+            "actions": bpy.data.actions,
+        }
+        before = {
+            key: {item.as_pointer() for item in datablocks}
+            for key, datablocks in import_datablocks.items()
+        }
         try:
             _call_import_operator(filepath)
             imported = [obj for obj in bpy.data.objects if obj.as_pointer() not in before]
@@ -295,12 +310,21 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             # object created during this transaction so a failed import does not
             # leave a half-imported scene behind.
             for obj in list(bpy.data.objects):
-                if obj.as_pointer() not in before:
+                if obj.as_pointer() not in before["objects"]:
                     try:
                         bpy.data.objects.remove(obj, do_unlink=True)
                     except (ReferenceError, RuntimeError):
                         pass
-            self.report({"ERROR"}, "导入失败，已清理本次新增对象：" + str(exc))
+            for key in ("actions", "materials", "images", "meshes", "curves",
+                        "armatures", "cameras", "lights", "collections"):
+                datablocks = import_datablocks[key]
+                for item in list(datablocks):
+                    try:
+                        if item.as_pointer() not in before[key] and item.users == 0:
+                            datablocks.remove(item)
+                    except (ReferenceError, RuntimeError):
+                        pass
+            self.report({"ERROR"}, "导入失败，已清理本次新增对象及未使用数据块：" + str(exc))
             return {"CANCELLED"}
         self.report({"INFO"}, "已导入 %d 个对象到「%s」。批次：%s" %
                     (len(imported), CATEGORY_COLLECTIONS[self.category], batch_id[:8]))
