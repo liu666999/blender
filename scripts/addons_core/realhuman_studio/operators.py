@@ -3092,12 +3092,14 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
                             raise ValueError("骨骼 %s 含有非有限数值。" % name)
                         clean[key] = numbers
                     quaternion = clean["rotation_quaternion"]
-                    quaternion_length = math.sqrt(sum(value * value for value in quaternion))
-                    if quaternion_length <= 1e-12:
-                        raise ValueError("骨骼 %s 的四元数长度为零。" % name)
-                    clean["rotation_quaternion"] = [
-                        value / quaternion_length for value in quaternion
-                    ]
+                    # Scale components before squaring to avoid overflow for
+                    # large but finite JSON numbers.
+                    scale = max(abs(value) for value in quaternion)
+                    if scale <= 1e-12:
+                        raise ValueError("骨骼 %s 的四元数长度为零或过小。" % name)
+                    scaled = [value / scale for value in quaternion]
+                    length = math.sqrt(sum(value * value for value in scaled))
+                    clean["rotation_quaternion"] = [value / length for value in scaled]
                     validated_bones[name] = clean
                     matched_bones.add(name)
                 validated.append((frame, validated_bones))
