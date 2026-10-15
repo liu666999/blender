@@ -238,6 +238,19 @@ def run():
            "Loading a named action set failed.")
     ensure(rig.animation_data.action == saved_action,
            "The selected named action set was not assigned to the rig.")
+    # The minimal 2D pose pad must key scale as well as location/rotation.
+    # Use the shared helper directly because a headless test cannot validate the modal GPU overlay.
+    bpy.context.scene.frame_set(17)
+    rig.pose.bones["forearm.R"].scale = (1.3, 1.15, 0.85)
+    keyed_bones = rh_operators._insert_rig_pose_keyframes(rig, 17)
+    ensure(keyed_bones == len(rig.pose.bones),
+           "2D pose-pad keyframe helper did not process every pose bone.")
+    action_for_2d = rig.animation_data.action
+    ensure(any(curve.data_path.endswith(".scale")
+               and 'pose.bones["forearm.R"]' in curve.data_path
+               for curve in action_for_2d.fcurves),
+           "2D pose-pad keyframe helper did not create a scale animation channel.")
+
     ensure("FINISHED" in bpy.ops.rh_studio.check_action_sequence(),
            "Basic action sequence check failed.")
 
