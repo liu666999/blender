@@ -2777,6 +2777,12 @@ class RH_OT_save_action_set(bpy.types.Operator):
         saved = source.copy()
         saved.name = target_name
         saved.use_fake_user = True
+        # Preserve which Action Slot the source rig was using. Actions can
+        # contain multiple slots of the same ID type, so blindly choosing the
+        # first slot when loading can silently select the wrong animation data.
+        source_slot = getattr(rig.animation_data, "action_slot", None)
+        if source_slot is not None:
+            saved["rh_studio_action_slot_identifier"] = source_slot.identifier
         if target_name != full_name:
             self.report({"WARNING"}, "同名动作集仍被其他对象使用，已安全另存为“%s”。" %
                         target_name[len(_ACTION_SET_PREFIX):])
@@ -2817,7 +2823,21 @@ class RH_OT_load_action_set(bpy.types.Operator):
         # Action, so explicitly bind a slot belonging to the newly loaded Action.
         action_slots = getattr(action, "slots", None)
         if action_slots is not None and len(action_slots):
-            rig.animation_data.action_slot = action_slots[0]
+            preferred_identifier = action.get("rh_studio_action_slot_identifier", "")
+            preferred_slot = next(
+                (slot for slot in action_slots
+                 if preferred_identifier and slot.identifier == preferred_identifier),
+                None,
+            )
+            if preferred_slot is None:
+                # Legacy action sets may not carry slot metadata. Prefer a
+                # slot compatible with Object animation, then fall back safely.
+                preferred_slot = next(
+                    (slot for slot in action_slots
+                     if getattr(slot, "target_id_type", "OBJECT") == "OBJECT"),
+                    action_slots[0],
+                )
+            rig.animation_data.action_slot = preferred_slot
         start, end = action.frame_range
         context.scene.frame_set(int(start))
         context.view_layer.update()
