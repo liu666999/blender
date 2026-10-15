@@ -56,7 +56,7 @@
 
 - Blender 后台 smoke test 覆盖多个资源管理、尺寸校准、形态键、骨架、动作、修复和报告路径。
 - 修复结果查看器 helper 测试覆盖 ALL/repaired/skipped/failed 筛选、格式错误行过滤、有效报告、错误 schema、缺失报告。
-- 剪贴板操作符在 Blender 后台测试中验证写入的路径字符串与输入一致；真实桌面剪贴板行为仍需 Windows GUI 复核。
+- 剪贴板操作符在后台测试中验证可被调用且正常结束；无头 Blender 不能可靠验证系统剪贴板内容，实际复制/粘贴行为需在 Windows GUI 中复核。
 - 最新检查到的 GitHub Actions 运行中，`python-syntax` 与 `blender-runtime` 均为 success。
 - 项目目标、已完成功能、未完成事项和技术审计分开记录，降低历史上下文丢失风险。
 
