@@ -33,8 +33,8 @@ def finite_vector(vector):
     return all(math.isfinite(float(value)) for value in vector)
 
 
-def evaluated_mesh_metrics(obj):
-    """Return evaluated local-space vertex metrics and clean up the temporary mesh."""
+def evaluated_mesh_metrics(obj, reference_coords=None):
+    """Return evaluated geometry metrics and coordinates, cleaning up temporary mesh data."""
     depsgraph = bpy.context.evaluated_depsgraph_get()
     evaluated_obj = obj.evaluated_get(depsgraph)
     evaluated_mesh = evaluated_obj.to_mesh()
@@ -43,20 +43,23 @@ def evaluated_mesh_metrics(obj):
         ensure(all(finite_vector(co) for co in coords),
                "Evaluated mesh contains non-finite vertex coordinates.")
         if not coords:
-            return {"vertex_count": 0, "changed_vertices_from_basis": 0,
-                    "max_displacement_from_basis": 0.0, "dimensions": [0.0, 0.0, 0.0]}
-        basis_coords = [vertex.co.copy() for vertex in obj.data.shape_keys.key_blocks[0].data]
-        ensure(len(coords) == len(basis_coords),
-               "Evaluated topology changed; cannot compare per-vertex shape-key deltas safely.")
-        deltas = [(coords[i] - basis_coords[i]).length for i in range(len(coords))]
+            metrics = {"vertex_count": 0, "changed_vertices_from_reference": 0,
+                       "max_displacement_from_reference": 0.0, "dimensions": [0.0, 0.0, 0.0]}
+            return metrics, coords
+        deltas = []
+        if reference_coords is not None:
+            ensure(len(coords) == len(reference_coords),
+                   "Evaluated modifier topology changed between shape-key states; cannot compare safely.")
+            deltas = [(coords[i] - reference_coords[i]).length for i in range(len(coords))]
         min_v = [min(float(co[axis]) for co in coords) for axis in range(3)]
         max_v = [max(float(co[axis]) for co in coords) for axis in range(3)]
-        return {
+        metrics = {
             "vertex_count": len(coords),
-            "changed_vertices_from_basis": sum(1 for delta in deltas if delta > 1e-6),
-            "max_displacement_from_basis": max(deltas, default=0.0),
+            "changed_vertices_from_reference": sum(1 for delta in deltas if delta > 1e-6),
+            "max_displacement_from_reference": max(deltas, default=0.0),
             "dimensions": [max_v[axis] - min_v[axis] for axis in range(3)],
         }
+        return metrics, coords
     finally:
         evaluated_obj.to_mesh_clear()
 
@@ -77,7 +80,7 @@ shape_keys = obj.data.shape_keys
 ensure(shape_keys is not None, "No shape-key datablock was created.")
 blocks = shape_keys.key_blocks
 original_values = {key.name: float(key.value) for key in blocks}
-original_active_index = shape_keys.key_blocks.active_index
+original_active_index = obj.active_shape_key_index
 report = {
     "schema": "realhuman_studio_real_mesh_validation_v2",
     "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -116,19 +119,19 @@ try:
 
         key.value = 0.0
         bpy.context.view_layer.update()
-        basis_metrics = evaluated_mesh_metrics(obj)
+        basis_metrics, baseline_coords = evaluated_mesh_metrics(obj)
 
         key.value = -1.0
         bpy.context.view_layer.update()
-        negative_metrics = evaluated_mesh_metrics(obj)
+        negative_metrics, _ = evaluated_mesh_metrics(obj, baseline_coords)
 
         key.value = 1.0
         bpy.context.view_layer.update()
-        positive_metrics = evaluated_mesh_metrics(obj)
+        positive_metrics, _ = evaluated_mesh_metrics(obj, baseline_coords)
 
-        ensure(negative_metrics["max_displacement_from_basis"] > 1e-6,
+        ensure(negative_metrics["max_displacement_from_reference"] > 1e-6,
                "Negative slider extreme produced no measurable change: " + name)
-        ensure(positive_metrics["max_displacement_from_basis"] > 1e-6,
+        ensure(positive_metrics["max_displacement_from_reference"] > 1e-6,
                "Positive slider extreme produced no measurable change: " + name)
         ensure(all(math.isfinite(float(value))
                    for metrics in (basis_metrics, negative_metrics, positive_metrics)
@@ -161,5 +164,5 @@ print("Object: %s | vertices: %d | report: %s" %
 for item in report["controls"]:
     print("%s: negative max delta %.6g; positive max delta %.6g" %
           (item["name"],
-           item["negative_extreme"]["max_displacement_from_basis"],
+           item["negative_extreme"]["max_displacement_from_reference"],
            item["positive_extreme"]["max_displacement_from_basis"]))
