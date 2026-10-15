@@ -217,3 +217,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ## 2026-10-15 故障注入测试加强
 
 在中途关键帧写入失败测试中新增 Action 数据块泄漏断言：记录测试前的 Action 名称集合，故障后检查没有新增且零用户的孤儿 Action。测试提交：3fb885d7d319076ccef6c4eb2c92c1daa77bdf4f。仍待当前提交的 Blender runtime 结果。
+
+## 2026-10-15 额外回归修正：导出动作 finally
+
+在复核导出/导入两个操作符时发现，之前对 `finally` 的文本替换也误改了 `RH_OT_export_action_json`，使其引用只存在于导入操作符的 `rollback_pose` 与 `pose_snapshot` 变量。现已恢复导出操作符正确的帧恢复逻辑（`scene.frame_set(original_frame)` 后更新视图层），姿态快照重放只保留在导入失败路径。修复提交：e32a8bf0e5d6806b395e0c5002118f477b812455。当前烟雾测试包含动作 JSON 导出/导入，但仍需实际 Blender runtime 执行。
