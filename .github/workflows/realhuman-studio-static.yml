@@ -1,6 +1,7 @@
 name: RealHuman Studio checks
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
