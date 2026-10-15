@@ -177,3 +177,9 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 ## 2026-10-15 故障注入检查范围扩展
 
 新增断言检查动作 JSON 中途写入失败后没有遗留新增的零用户 Action。提交：3fb885d7d319076ccef6c4eb2c92c1daa77bdf4f。该检查尚未由 Blender runtime 执行。
+
+## 2026-10-15 导出操作符回归审计
+
+- 发现此前替换 `finally` 时误将导入回滚变量引用带入 `RH_OT_export_action_json`，这会在导出动作时触发异常路径。
+- 已在提交 `e32a8bf0e5d6806b395e0c5002118f477b812455` 中恢复导出操作符 finally：恢复原帧并更新视图层。导入操作符独立保留 `rollback_pose` 与 `pose_snapshot` 恢复。
+- 该问题来自最近编辑，尚无运行结果；当前 HEAD 需要完整 smoke runtime 验证。
