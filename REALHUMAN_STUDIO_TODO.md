@@ -151,3 +151,5 @@
 - [ ] 在 Blender smoke runtime 执行故障注入测试，确认第二次关键帧写入抛错后能恢复原 Action 与完整姿态。
 - [ ] 检查部分创建的 Action 是否在目标 Blender 版本中正确清理，特别是 fake-user 与 Action Slot 行为。
 - [ ] 只有实际 CI 通过后才能将该项标为通过。
+
+- [ ] **回滚帧求值顺序验证：** 已将异常时的姿态恢复移动到 `scene.frame_set(original_frame)` 之后，避免原 Action 重新求值覆盖姿态；必须用故障注入测试确认。
