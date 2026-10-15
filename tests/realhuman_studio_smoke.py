@@ -833,7 +833,8 @@ def run():
         with open(manifest_path, "r", encoding="utf-8") as stream:
             ensure(stream.read() == malformed_manifest,
                    "Project setup modified a malformed manifest while rejecting it.")
-        # Restore a valid manifest for the existing import-history test below.
+        # Restore a valid empty-history manifest for the existing import-history test below.
+        preserved_manifest["asset_sources"] = []
         with open(manifest_path, "w", encoding="utf-8") as stream:
             json.dump(preserved_manifest, stream, ensure_ascii=False, indent=2)
 
