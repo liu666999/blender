@@ -221,3 +221,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ## 2026-10-15 额外回归修正：导出动作 finally
 
 在复核导出/导入两个操作符时发现，之前对 `finally` 的文本替换也误改了 `RH_OT_export_action_json`，使其引用只存在于导入操作符的 `rollback_pose` 与 `pose_snapshot` 变量。现已恢复导出操作符正确的帧恢复逻辑（`scene.frame_set(original_frame)` 后更新视图层），姿态快照重放只保留在导入失败路径。修复提交：e32a8bf0e5d6806b395e0c5002118f477b812455。当前烟雾测试包含动作 JSON 导出/导入，但仍需实际 Blender runtime 执行。
+
+## 2026-10-15 补强：动作导入回滚的 Action 泄漏断言
+
+将 smoke test 的失败路径检查从“只查新增且 users==0 的 Action”收紧为“按 Blender 数据块指针识别失败期间所有新增 Action，不论 users 数量”。这样即使异常残留 Action 仍被某处引用，也不会被原测试漏掉。提交：`0b33c70df8b7b21c9ad3aa501a39b09b847f2b91`。该项为测试断言加固，尚未运行 Blender runtime。
