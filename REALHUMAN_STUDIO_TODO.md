@@ -226,3 +226,10 @@
 - [ ] 验证 Blender 当前版本的 bpy.data.collections.remove(..., do_unlink=True) 行为及根集合链接恢复。
 - [ ] 同时运行选择失败后保留资源/清单记录的测试，确认事务边界没有回归。
 - [ ] 当前没有对应 CI/runtime 结果，不能视为验收完成。
+
+## 2026-10-15 待验证：失败导入集合回滚
+
+- [ ] 在目标 Blender runtime 中运行新增分类阶段故障注入测试，确认新建 Collection 与对象全部回滚。
+- [ ] 验证 Blender 当前版本的 collections.remove(..., do_unlink=True) 行为及根集合链接恢复。
+- [ ] 同时运行选择失败后保留资源/清单记录的测试，确认事务边界没有回归。
+- [ ] 当前没有对应 CI/runtime 结果，不能视为验收完成。
