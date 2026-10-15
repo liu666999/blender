@@ -205,3 +205,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 测试使用前面实际导出的 `json_path` fixture；已修正测试路径变量。
 - 提交：源码 acc88d551a8d28f37202009f684726fc66a55977；故障注入测试 cb92fd6985b8875b3f479a3bc43e7e22cb030786；测试路径修正 1775490b240b2af64655deeb38d362f82ca0bf77。
 - 当前没有这些提交对应的 Blender runtime CI 结果，故状态仍为待验证。
+
+## 2026-10-15 额外修正：回滚姿态与帧求值顺序
+
+复核中发现，异常分支恢复骨骼姿态后，`finally` 再次 `scene.frame_set(original_frame)` 可能触发原 Action 求值并覆盖刚恢复的姿态。现改为先恢复原帧，再在回滚场景重新应用完整 pose snapshot，最后更新视图层。提交：09b6537d62d2e333cb4b372d849211958039e552。仍待 Blender runtime 故障注入测试确认。
