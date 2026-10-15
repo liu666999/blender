@@ -914,6 +914,32 @@ def run():
         with open(manifest_path, "w", encoding="utf-8") as stream:
             json.dump(preserved_manifest, stream, ensure_ascii=False, indent=2)
 
+        # If an importer creates an object and then fails, the operator must
+        # remove the partial object instead of leaving a broken scene residue.
+        rollback_source_path = os.path.join(tmp, "partial_import.fbx")
+        with open(rollback_source_path, "wb") as stream:
+            stream.write(b"fault-injected importer fixture")
+        objects_before_failed_import = {obj.as_pointer() for obj in bpy.data.objects}
+        original_import_call = rh_operators._call_import_operator
+        def create_then_fail_import(filepath):
+            mesh_data = bpy.data.meshes.new("RH_partial_import_mesh")
+            partial = bpy.data.objects.new("RH_partial_import_object", mesh_data)
+            bpy.context.scene.collection.objects.link(partial)
+            raise RuntimeError("injected importer failure")
+        rh_operators._call_import_operator = create_then_fail_import
+        try:
+            try:
+                failed_import_result = bpy.ops.rh_studio.import_asset(
+                    filepath=rollback_source_path, category="BASE_BODY")
+            except RuntimeError:
+                failed_import_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+        ensure("CANCELLED" in failed_import_result,
+               "Fault-injected asset import should return CANCELLED.")
+        ensure({obj.as_pointer() for obj in bpy.data.objects} == objects_before_failed_import,
+               "Failed asset import left newly created objects in the scene.")
+
         # A successful asset import should append a traceable batch without
         # discarding the project's existing manifest fields.
         project_dir = os.path.join(tmp, "SmokeTest")
