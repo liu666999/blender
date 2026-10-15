@@ -87,3 +87,8 @@ The headless smoke script exercises Python API paths, not real mouse input, GPU 
 ## Current recommendation
 
 Continue in the requested order: finish CI-backed action-set regression checks; validate optional region masks on real human topology; run the documented CC0 real-human mesh diagnostic and inspect it visually; then complete Windows GUI acceptance for the sidebar, result viewer, pose overlay, rig and materials. After those gates, continue with unit/orientation-aware asset repair, better rig deformation, and the missing clothing/anatomy workflows. Keep bundled third-party assets as a separate, license-reviewed milestone.
+
+
+## 2026-10-15 补充：动作集真实文件往返
+
+新增 `tests/realhuman_studio_action_persistence.py`，以第二个 Blender 进程重开临时 `.blend`，核验命名动作集、fake-user 标记、骨架动作绑定与关键帧数值。CI 现已包含该脚本并编译整个 `tests` 目录。当前仅代表测试已编写并接入工作流；最新分支尚无对应 Actions 结果，不能记作运行通过。
