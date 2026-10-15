@@ -3191,6 +3191,17 @@ def _insert_rig_pose_keyframes(rig, frame):
 # ---------------------------------------------------------------------------
 # Minimal 2D pose pad: circle head + large-character body, with four drag handles.
 # The drawing is rendered into the 3D VIEW region, not the sidebar region.
+def _simple_pose_pad_center(width, height):
+    """Return a sketch center that keeps the head and footer inside small view regions."""
+    width = float(width)
+    height = float(height)
+    cx = max(120.0, min(width - 120.0, width * 0.72))
+    # The drawing extends roughly 99 px above and 124 px below its center.
+    # Keep at least 124 px below for the footer and 100 px above for the head.
+    cy = max(124.0, min(height - 100.0, height * 0.50))
+    return cx, cy
+
+
 class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
     bl_idname = "rh_studio.simple_2d_pose_pad"
     bl_label = "简笔摆姿"
@@ -3427,8 +3438,7 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
         if width < 240 or height < 220:
             self.report({"ERROR"}, "3D 视图太小，请先放大视图区域。")
             return {"CANCELLED"}
-        self._cx = max(120.0, min(width - 120.0, width * 0.72))
-        self._cy = max(140.0, min(height - 140.0, height * 0.50))
+        self._cx, self._cy = _simple_pose_pad_center(width, height)
 
         self._points = {}
         self._angles = {name: 0.0 for name in self._CONTROL_BONES}
