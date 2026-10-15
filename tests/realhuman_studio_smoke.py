@@ -878,6 +878,8 @@ def run():
         preserved_export_contents = '{"keep": "old export"}\n'
         with open(preserved_export_path, "w", encoding="utf-8") as stream:
             stream.write(preserved_export_contents)
+        export_restore_frame = 73
+        bpy.context.scene.frame_set(export_restore_frame)
         original_json_dump = rh_operators.json.dump
         def fail_json_serialization(*args, **kwargs):
             raise OSError("injected JSON serialization failure")
@@ -891,6 +893,8 @@ def run():
             rh_operators.json.dump = original_json_dump
         ensure("CANCELLED" in result,
                "Injected export serialization failure should cancel the export.")
+        ensure(bpy.context.scene.frame_current == export_restore_frame,
+               "Failed export did not restore the original scene frame.")
         with open(preserved_export_path, "r", encoding="utf-8") as stream:
             ensure(stream.read() == preserved_export_contents,
                    "Failed export truncated an existing JSON file.")
@@ -898,8 +902,22 @@ def run():
                "Failed export left a temporary JSON file behind.")
 
         json_path = os.path.join(tmp, "ci_motion.json")
+        ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=preserved_export_path),
+               "Action JSON export could not replace an existing file.")
+        with open(preserved_export_path, "r", encoding="utf-8") as stream:
+            replaced_payload = json.load(stream)
+        ensure(replaced_payload.get("format") == "realhuman_studio_action_v1",
+               "Successful export did not atomically replace the old JSON payload.")
+        ensure(bpy.context.scene.frame_current == export_restore_frame,
+               "Successful export did not restore the original scene frame.")
+        ensure(not any(name.startswith("preserved_export.json.tmp-") for name in os.listdir(tmp)),
+               "Successful export left a temporary JSON file behind.")
+
+        json_path = os.path.join(tmp, "ci_motion.json")
         ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=json_path),
                "Action JSON export failed.")
+        ensure(bpy.context.scene.frame_current == export_restore_frame,
+               "Standard export did not restore the original scene frame.")
         ensure(os.path.isfile(json_path), "Action JSON file was not created.")
         with open(json_path, "r", encoding="utf-8") as stream:
             action_payload = json.load(stream)
