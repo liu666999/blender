@@ -186,3 +186,9 @@
 - 资源清单导出使用 `_write_json_atomic`，避免 JSON 序列化或写盘中断截断已有 `asset_manifest.json`。
 - smoke test 新增失败注入与正常导出回归，检查目标内容保留、schema 正确及临时文件不残留。
 - 该功能源码和测试已提交；运行状态仍为待 Blender runtime/CI 验证。
+
+## 2026-10-15 动作集保存事务性加固
+
+- 动作集保存新增暂存阶段：复制 Action、设置 fake user、保留 Action Slot 标识均成功后，才替换无真实使用者的同名旧条目。
+- 新增 `_copy_action_set_action` 故障注入 seam 和回归用例，覆盖复制失败时保留旧动作集及暂存/备份清理。
+- 源码提交 `868f4265c96f8e26c0a0aef3f23ffb8dfcefb26d`，测试提交 `e0779a5d588f8f399221e322ed546783fa82f40f`；尚未在 Blender runtime 中执行。
