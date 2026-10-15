@@ -136,6 +136,10 @@ def run():
     proportion_mesh.name = "RH CI Proportion Mesh"
     proportion_mesh.scale = (0.35, 0.22, 1.0)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    shoulder_mask = proportion_mesh.vertex_groups.new(name="RH遮罩 | 肩宽")
+    upper_vertices = [vertex.index for vertex in proportion_mesh.data.vertices
+                      if vertex.co.z > 0.0]
+    shoulder_mask.add(upper_vertices, 1.0, "REPLACE")
     activate(proportion_mesh)
     result = bpy.ops.rh_studio.generate_body_proportion_keys()
     ensure("FINISHED" in result, "Body proportion shape-key generation failed.")
@@ -148,8 +152,12 @@ def run():
            and abs(shoulder_key.slider_max - 1.0) < 1e-6,
            "Body proportion controls should support a -1 to +1 range.")
     ensure(any((shoulder_key.data[i].co - proportion_keys[0].data[i].co).length > 1e-5
-               for i in range(len(proportion_mesh.data.vertices))),
-           "Generated shoulder key does not change any vertex coordinates.")
+               for i in upper_vertices),
+           "Generated shoulder key does not deform vertices inside its authored mask.")
+    ensure(all((shoulder_key.data[i].co - proportion_keys[0].data[i].co).length < 1e-6
+               for i, vertex in enumerate(proportion_mesh.data.vertices)
+               if vertex.index not in upper_vertices),
+           "Generated shoulder key deformed vertices outside its authored mask.")
     custom_key = proportion_mesh.shape_key_add(name="User Custom", from_mix=False)
     custom_key.data[0].co.x += 0.125
     custom_key.value = 0.25
