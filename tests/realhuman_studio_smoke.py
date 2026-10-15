@@ -163,7 +163,8 @@ def run():
     # shape-key coordinates, and verify the vertex-group mask still gates it.
     shoulder_key.value = -1.0
     bpy.context.view_layer.update()
-    evaluated_mesh = proportion_mesh.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
+    evaluated_object = proportion_mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    evaluated_mesh = evaluated_object.to_mesh()
     try:
         ensure(any((evaluated_mesh.vertices[i].co - proportion_keys[0].data[i].co).length > 1e-5
                    for i in upper_vertices),
@@ -173,7 +174,7 @@ def run():
                    if vertex.index not in upper_vertices),
                "Negative shoulder slider value deformed vertices outside its authored mask.")
     finally:
-        proportion_mesh.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh_clear()
+        evaluated_object.to_mesh_clear()
     shoulder_key.value = 0.0
     bpy.context.view_layer.update()
     custom_key = proportion_mesh.shape_key_add(name="User Custom", from_mix=False)
