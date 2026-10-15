@@ -287,6 +287,10 @@ def run():
            "Loading a named action set failed.")
     ensure(rig.animation_data.action == saved_action,
            "The selected named action set was not assigned to the rig.")
+    saved_slots = getattr(saved_action, "slots", None)
+    if saved_slots is not None and len(saved_slots):
+        ensure(rig.animation_data.action_slot == saved_slots[0],
+               "Loading a named action set did not bind a slot belonging to that Action.")
     action_start = int(saved_action.frame_range[0])
     ensure(bpy.context.scene.frame_current == action_start,
            "Loading an action set did not move the timeline to its first keyed frame.")
