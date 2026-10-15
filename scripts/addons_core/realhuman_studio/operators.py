@@ -2812,6 +2812,12 @@ class RH_OT_load_action_set(bpy.types.Operator):
             return {"CANCELLED"}
         rig.animation_data_create()
         rig.animation_data.action = action
+        # Layered Actions (Blender 4.4+) need a slot bound to the target ID.
+        # An armature may still carry a slot from its previously assigned
+        # Action, so explicitly bind a slot belonging to the newly loaded Action.
+        action_slots = getattr(action, "slots", None)
+        if action_slots is not None and len(action_slots):
+            rig.animation_data.action_slot = action_slots[0]
         start, end = action.frame_range
         context.scene.frame_set(int(start))
         context.view_layer.update()
