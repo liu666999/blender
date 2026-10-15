@@ -811,6 +811,31 @@ def run():
             manifest = json.load(stream)
         ensure(manifest.get("application") == "RealHuman Studio",
                "Project manifest content is unexpected.")
+        # Reopening project setup must preserve import history and custom fields.
+        manifest["custom_metadata"] = {"keep": True}
+        manifest["asset_sources"].append({"batch_id": "preserve-me"})
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(manifest, stream, ensure_ascii=False, indent=2)
+        result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
+        ensure("FINISHED" in result, "Reusing an existing valid project should succeed.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            preserved_manifest = json.load(stream)
+        ensure(preserved_manifest.get("custom_metadata") == {"keep": True}
+               and preserved_manifest.get("asset_sources") == [{"batch_id": "preserve-me"}],
+               "Project setup overwrote existing metadata or import history.")
+
+        # A malformed existing manifest must be rejected and left byte-for-byte intact.
+        malformed_manifest = "{not valid json\n"
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            stream.write(malformed_manifest)
+        result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
+        ensure("CANCELLED" in result, "Project setup should reject a malformed existing manifest.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            ensure(stream.read() == malformed_manifest,
+                   "Project setup modified a malformed manifest while rejecting it.")
+        # Restore a valid manifest for the existing import-history test below.
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(preserved_manifest, stream, ensure_ascii=False, indent=2)
 
         # A successful asset import should append a traceable batch without
         # discarding the project's existing manifest fields.
