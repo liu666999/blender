@@ -141,3 +141,10 @@
 - 提交：66306891541d0ddaa33dc8f3fdff8577e5dae7f1、1d110d0456dc2374d5dc8037bcfb60b742f04784；等待 Blender runtime 执行。
 
 - 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
+
+## 动作导入故障注入测试补充（2026-10-15）
+
+- 新增关键帧写入 seam，正常情况下仍直接调用 Blender `keyframe_insert`；测试可在第二次关键帧写入时注入异常。
+- 回归断言覆盖：操作返回取消、原 Action 恢复、全骨架位置/旋转模式/四元数/Euler/轴角/缩放均恢复。
+- 使用已导出的 JSON 样本并修正测试路径变量。提交：acc88d551a8d28f37202009f684726fc66a55977、cb92fd6985b8875b3f479a3bc43e7e22cb030786、1775490b240b2af64655deeb38d362f82ca0bf77。
+- 以上是代码和测试覆盖，不代表 runtime 已通过。
