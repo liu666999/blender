@@ -145,3 +145,9 @@
 - [ ] 成功运行 CI 后再更新状态。
 
 - 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
+
+## 2026-10-15 新增待验证项：动作写入中途异常
+
+- [ ] 在 Blender smoke runtime 执行故障注入测试，确认第二次关键帧写入抛错后能恢复原 Action 与完整姿态。
+- [ ] 检查部分创建的 Action 是否在目标 Blender 版本中正确清理，特别是 fake-user 与 Action Slot 行为。
+- [ ] 只有实际 CI 通过后才能将该项标为通过。
