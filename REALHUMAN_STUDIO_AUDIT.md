@@ -163,3 +163,9 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - 测试在首个关键帧写入后注入异常，检查取消结果、原 Action 与完整骨架姿态回滚。
 - 代码提交 acc88d551a8d28f37202009f684726fc66a55977；测试 cb92fd6985b8875b3f479a3bc43e7e22cb030786；路径修正 1775490b240b2af64655deeb38d362f82ca0bf77。
 - 当前未取得 runtime 结果，且需在目标 Blender 版本验证 orphan Action 清理与 Action Slot 恢复细节。
+
+## 2026-10-15 新发现与修正（待验证）
+
+- 风险：在异常分支恢复骨骼后，`finally` 恢复原帧可能重新求值原 Action，覆盖刚恢复的姿态快照。
+- 修正：先恢复原帧，再重新应用 pose snapshot，最后更新视图层。
+- 提交：09b6537d62d2e333cb4b372d849211958039e552。尚无对应 runtime CI 结果。
