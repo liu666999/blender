@@ -4,6 +4,12 @@
 **Source branch:** `feature/realhuman-studio-phase1`  
 **Scope:** Source-level review of `scripts/addons_core/realhuman_studio/`, the smoke-test script, and the workflow. This is not a claim that a full Blender GUI session or a Windows build has been tested.
 
+## Project records
+
+- [Project goals and task report](REALHUMAN_STUDIO_TASK_REPORT.md) — long-term vision, current phase, acceptance criteria and priorities.
+- [Completed features](REALHUMAN_STUDIO_COMPLETED.md) — implemented capabilities and their verified boundaries.
+- [Unfinished work](REALHUMAN_STUDIO_TODO.md) — missing features, manual validation and release tasks.
+
 ## Status legend
 
 - **Implemented in source:** an operator or UI path exists in the checked-in code.
