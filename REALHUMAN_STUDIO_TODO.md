@@ -93,3 +93,7 @@
 
 - [ ] **动作集 slot 往返验证：** 已在 `tests/realhuman_studio_action_persistence.py` 中为支持 slots 的 Action 显式绑定首个 slot，并检查复制动作帧范围、重开后 slot 与关键帧求值；代码提交 `28e0aaeb8a889d966af007bfc26556d7e8615973`。等待该提交触发的 CI 结果，若出现失败先依据日志修复。
 - [ ] 在 CI 实际通过前，不将此修正标记为通过；真实人体网格与 GUI 验收待办维持不变。
+## CI 触发阻塞更新（2026-10-15）
+
+- [ ] 对代码提交 `28e0aaeb8a889d966af007bfc26556d7e8615973` 运行完整 workflow。虽然测试文件位于 workflow 的 push/pull_request 路径过滤器中，但最新 Actions 查询仍无新 run；当前可用连接没有 workflow dispatch 写入动作。请在 [Actions 页面](https://github.com/liu666999/blender/actions/workflows/realhuman-studio-static.yml) 手动点击 Run workflow，之后再根据实际日志修复。
+- [ ] 代码提交后需持续核对 CI 状态；文档提交不代表测试触发，CI 没有 run 也不能视为通过。
