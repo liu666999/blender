@@ -97,3 +97,10 @@
 
 - [ ] 对代码提交 `28e0aaeb8a889d966af007bfc26556d7e8615973` 运行完整 workflow。虽然测试文件位于 workflow 的 push/pull_request 路径过滤器中，但最新 Actions 查询仍无新 run；当前可用连接没有 workflow dispatch 写入动作。请在 [Actions 页面](https://github.com/liu666999/blender/actions/workflows/realhuman-studio-static.yml) 手动点击 Run workflow，之后再根据实际日志修复。
 - [ ] 代码提交后需持续核对 CI 状态；文档提交不代表测试触发，CI 没有 run 也不能视为通过。
+
+## 2026-10-15 补充：分层 Action 槽位绑定修正（待运行验证）
+
+- 源码修正：载入命名动作集时，如果 Action 暴露 `slots`，操作会显式将骨架的 `animation_data.action_slot` 绑定到该 Action 的首个槽位，避免骨架仍持有旧 Action 槽位而导致新动作通道不求值。
+- 回归测试：smoke test 新增载入后槽位绑定断言；`tests/realhuman_studio_action_persistence.py` 不再在重开文件后主动重绑槽位，而是直接断言保存的槽位绑定仍存在，避免测试自行修复待测状态。
+- 本次代码提交：`717ed77e73aa60082ef715fd88c3a80ea941e390`（operator）、`23864c789bc1c755371c4f48435c700f1176d71d`（smoke test）、`7cb5587d1c963a074418765d347e4b891b475d8d`（.blend 往返测试）。
+- **验证状态：仅完成源码与测试更新，尚未运行当前分支的 Blender runtime/CI；不得标记为通过。** 下一步继续核对 Actions 运行并根据真实日志修复，之后再按顺序进行真实人体网格验证和 GUI 验收。
