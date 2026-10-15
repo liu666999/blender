@@ -92,11 +92,10 @@ ensure(rig.animation_data is not None and rig.animation_data.action == action,
        "The reopened rig is not assigned to the saved named action set.")
 action_slots = getattr(action, "slots", None)
 if action_slots is not None and len(action_slots):
-    # Rebind the copied Action's slot after loading, then verify evaluated
-    # channel values rather than only checking that keyframe data exists.
-    rig.animation_data.action_slot = action_slots[0]
+    # Do not repair the slot here: the round-trip must preserve the binding
+    # already stored in the .blend file.
     ensure(rig.animation_data.action_slot == action_slots[0],
-           "The reopened rig did not bind to the copied Action slot.")
+           "The reopened rig did not preserve its copied Action slot binding.")
 ensure(action.frame_range[0] <= 1 and action.frame_range[1] >= 13,
        "Keyed frame range did not survive .blend reopen.")
 bpy.context.scene.frame_set(13)
