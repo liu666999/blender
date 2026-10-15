@@ -2951,20 +2951,7 @@ class RH_OT_export_action_json(bpy.types.Operator, ExportHelper):
             self.report({"ERROR"}, "导出动作 JSON 失败：" + str(exc))
             return {"CANCELLED"}
         finally:
-            # Restore the frame first: evaluating the restored Action can overwrite
-            # manually restored pose values, so reapply the snapshot afterwards.
             scene.frame_set(original_frame)
-            if rollback_pose:
-                for bone_name, values in pose_snapshot.items():
-                    bone = rig.pose.bones.get(bone_name)
-                    if bone is None:
-                        continue
-                    bone.location = values["location"]
-                    bone.rotation_mode = values["rotation_mode"]
-                    bone.rotation_quaternion = values["rotation_quaternion"]
-                    bone.rotation_euler = values["rotation_euler"]
-                    bone.rotation_axis_angle = values["rotation_axis_angle"]
-                    bone.scale = values["scale"]
             context.view_layer.update()
         self.report({"INFO"}, "已导出 %d 帧、%d 根骨骼的动作 JSON。" %
                     (len(frames), len(rig.pose.bones)))
