@@ -44,7 +44,7 @@
 | Starter poses and keyframe insertion | Implemented; smoke-tested | Keys local location, the active rotation representation, and scale for every pose bone. Existing Actions retain their names; only a newly created Action is named `RealHuman Motion`. |
 | Selected-bone rotation editor | Implemented; headless smoke-tested | Sets local XYZ rotation on the active pose bone and can insert a rotation keyframe at the current frame; requires Pose Mode and an active bone selection. GUI discoverability and usability still need manual validation. |
 | Named single-pose presets | Implemented; smoke-tested | Stored in the current scene as JSON custom data. |
-| Named full-action sets | Implemented; smoke tests cover duplicate-name safety, persistence, load frame selection, and keyed transform evaluation | Duplicates an animation Action in the current .blend file. When a same-named saved Action is still used by another object, the save path creates a numbered copy rather than deleting that shared Action. Loading assigns the saved Action and moves the timeline to its first keyed frame; playback evaluation is smoke-tested, while save/reopen persistence still needs a separate file round-trip test. |
+| Named full-action sets | Implemented; smoke tests cover duplicate-name safety, persistence flag, load frame selection, and keyed transform evaluation | Duplicates an animation Action in the current .blend file. When a same-named saved Action is still used by another object, the save path creates a numbered copy rather than deleting that shared Action. Loading assigns the saved Action and moves the timeline to its first keyed frame; playback evaluation is smoke-tested, while save/reopen persistence still needs a separate file round-trip test. |
 | Basic action-sequence checks | Implemented in source; smoke test added | Checks Action existence, frame range, one-frame clips and current-frame range; it does not judge animation quality. |
 | Action JSON import/export | Implemented in source; smoke-tested | Samples local bone transforms per integer frame; converts the active local rotation matrix so Euler-animated bones are not exported with stale quaternion values; rejects unsupported rotation encodings on import; validates optional source-FPS metadata and warns on a mismatch without silently changing scene FPS. Not a lossless serialization of constraints, drivers, or NLA. |
 | Standard views and body-facing presets | Implemented in source; smoke-tested | GUI context and actual view orientation still need manual checks. |
@@ -62,6 +62,12 @@
 - No visual quality guarantee for automatic skin weights, facial expressions, anatomical alignment, or mesh deformation.
 - No standalone application shell, installer, Windows executable/package, custom scripting console, or full Python-like project execution environment beyond Blender's existing facilities.
 - No third-party anatomy asset import pipeline with automated license review, semantic anatomy naming, unit conversion, or coordinate-system alignment. The selected-asset JSON audit is diagnostic only. Position normalization only translates the selected group; it does not apply transforms, infer real-world units, or correct model orientation.
+
+## Real-human asset validation
+
+- Added `REALHUMAN_STUDIO_ASSET_SOURCES.md` with the official Blender Studio Human Base Meshes v1.4.1 source and its listed CC0 license, plus a manual test procedure.
+- Added `tests/realhuman_studio_real_mesh_validation.py` to generate/update the four proportion controls on a selected real-human mesh and export topology, UV/material/modifier, mask, and deformation-delta diagnostics to JSON.
+- This helper is deliberately separate from the default smoke test: the 49 MB external bundle is not checked into the repository, and no actual real-human GUI run has yet been performed. The helper's coordinate metrics cannot certify anatomy, silhouette, clothing collision, or rig deformation.
 
 ## Known risks and manual validation checklist
 
