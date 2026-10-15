@@ -98,3 +98,7 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - 旧运行 [38544308219](https://github.com/liu666999/blender/actions/runs/38544308219) 中 `python-syntax` 通过，`blender-runtime` 因旧版 smoke test 断言系统剪贴板精确内容而失败。剪贴板是无头环境限制，不应由后台 CI 检验真实系统剪贴板值；应在 Windows GUI 中手动复制并粘贴确认。
 - 已静态核对动作集保存操作符 `action_set_name` 参数名与 `.blend` 往返测试调用一致。动作持久化测试仍需由匹配分支版本的 Blender 实际执行，之后才可更新为测试通过。
 - 真实人体形态键、遮罩边界、骨架/服装穿插、简笔摆姿 GPU overlay 与侧栏布局仍分别需要真实人体数据或 GUI 验收。自动化几何位移指标只能证明网格坐标发生变化，不证明人体解剖或视觉质量合格。
+## 2026-10-15 补充：Action slot 检查
+
+- 测试脚本已对具有 `slots` 集合的复制 Action 显式设置 `rig.animation_data.action_slot`，避免仅赋值 `animation_data.action` 却未绑定 slot 的测试假阴性；在重开验证中同样检查 slot 关联与第 13 帧通道求值。
+- 这项是测试可靠性修正，不是功能验收结论。提交 `28e0aaeb8a889d966af007bfc26556d7e8615973` 的 CI 尚未返回；如果目标 Blender 构建的 API 行为不同，应按日志调整，而不是跳过失败。
