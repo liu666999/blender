@@ -79,3 +79,11 @@
 ## 退出标准
 
 某个待办只有在代码/资源真实存在、相关测试通过、必要的 GUI/视觉验证完成，并更新 [已完成功能清单](REALHUMAN_STUDIO_COMPLETED.md) 与 [技术审计](REALHUMAN_STUDIO_AUDIT.md) 后，才能从待办中移除。仅有 UI 按钮、类定义或规划文档不算完成。
+
+
+## 本轮仍待完成（2026-10-15）
+
+- [ ] 查看最新分支对应的 GitHub Actions 结果；确认动作集保存/重开测试在目标 Blender 构建中实际通过。
+- [ ] 下载并加载 Blender Studio CC0 Human Base Meshes，在真实人体上运行 `tests/realhuman_studio_real_mesh_validation.py`，检查四种形态键的正负方向、轮廓、体积与服装穿插。
+- [ ] 在 Blender GUI 中手测简笔摆姿的 GPU 绘制、拖动手脚端点、K 关键帧、R 复位、Esc 退出，并检查侧栏、骨架和材质节点。
+- [ ] 在真实网格测试前，不把立方体遮罩测试等同于真实人体变形验收。
