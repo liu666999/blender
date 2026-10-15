@@ -154,3 +154,5 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **修复：** 保存全骨架变换快照；异常时恢复原 Action、可用的 Action Slot 与骨骼姿态，并清理无用户的临时 Action。
 - **回归：** 非法 JSON 导入应保持当前姿态不变。
 - **状态：** 已提交源码和测试，但尚未取得 Blender runtime 结果；真实写入中断路径仍待专门注入故障验证。
+
+- 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
