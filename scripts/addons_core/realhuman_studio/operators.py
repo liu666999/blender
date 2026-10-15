@@ -3115,7 +3115,21 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
             self.report({"ERROR"}, "写入动作失败，已恢复原动作与骨骼姿态：" + str(exc))
             return {"CANCELLED"}
         finally:
+            # Restore the frame first because evaluating the original Action can
+            # overwrite manually restored pose values. Reapply the snapshot only
+            # on the rollback path, after frame evaluation has completed.
             scene.frame_set(original_frame)
+            if rollback_pose:
+                for bone_name, values in pose_snapshot.items():
+                    bone = rig.pose.bones.get(bone_name)
+                    if bone is None:
+                        continue
+                    bone.location = values["location"]
+                    bone.rotation_mode = values["rotation_mode"]
+                    bone.rotation_quaternion = values["rotation_quaternion"]
+                    bone.rotation_euler = values["rotation_euler"]
+                    bone.rotation_axis_angle = values["rotation_axis_angle"]
+                    bone.scale = values["scale"]
             context.view_layer.update()
         if source_fps is not None:
             scene_fps = scene.render.fps / max(scene.render.fps_base, 1e-8)
