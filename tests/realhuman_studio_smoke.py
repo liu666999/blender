@@ -920,6 +920,7 @@ def run():
         with open(rollback_source_path, "wb") as stream:
             stream.write(b"fault-injected importer fixture")
         objects_before_failed_import = {obj.as_pointer() for obj in bpy.data.objects}
+        meshes_before_failed_import = {mesh.as_pointer() for mesh in bpy.data.meshes}
         original_import_call = rh_operators._call_import_operator
         def create_then_fail_import(filepath):
             mesh_data = bpy.data.meshes.new("RH_partial_import_mesh")
@@ -939,6 +940,8 @@ def run():
                "Fault-injected asset import should return CANCELLED.")
         ensure({obj.as_pointer() for obj in bpy.data.objects} == objects_before_failed_import,
                "Failed asset import left newly created objects in the scene.")
+        ensure({mesh.as_pointer() for mesh in bpy.data.meshes} == meshes_before_failed_import,
+               "Failed asset import left an orphan mesh datablock.")
 
         # A successful asset import should append a traceable batch without
         # discarding the project's existing manifest fields.
