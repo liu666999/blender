@@ -78,3 +78,9 @@
 - 已新增动作集保存后真实 `.blend` 重开往返测试，并接入 Blender runtime CI 步骤。
 - 已将整个 `tests` 目录纳入 Python 语法编译检查，覆盖动作集往返脚本和真实人体网格诊断脚本。
 - 以上是测试代码与工作流已提交；在最新 CI 结果出现前，不等于运行已通过，也不等于 GUI 已验收。
+## CI 状态核对补充（2026-10-15）
+
+- 动作集 `.blend` 保存/重开测试已写入并接入 workflow，但截至本次检查，没有找到以当前分支 HEAD `659592ae6b22adb50e4031191ae1037cfae66d2e` 为测试提交的 Actions 运行；因此不能记录为运行通过。
+- 可读取的旧 run [38544308219](https://github.com/liu666999/blender/actions/runs/38544308219) 的 Python 语法 job 通过，但 Blender runtime job 在旧版 smoke test 的系统剪贴板精确值断言处失败。该失败属于旧代码，不能用来判断当前分支状态。
+- 当前已核对动作集保存操作符属性名 `action_set_name` 与持久化测试一致。这个检查只确认调用接口吻合，不替代 Blender 实际运行。
+- 当前分支没有任何功能获得本轮新增的 CI 通过或 GUI 验收结论；真实人体网格、简笔摆姿 GPU 绘制与 Windows 剪贴板行为仍待实测。
