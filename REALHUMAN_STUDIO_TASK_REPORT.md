@@ -99,7 +99,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ## 6. 当前状态快照
 
 - 当前代码属于 **Blender 插件 Phase 1**，不是独立应用。
-- 分支最新已检查的 GitHub Actions 运行：Python 语法检查与 Blender 后台运行 smoke test 均通过；这只证明已覆盖的自动化路径。
+- 最近一次针对修复结果查看器交互测试的 GitHub Actions 运行中，Python 语法检查通过，但 Blender 后台测试因系统剪贴板在无头环境下不可可靠验证而失败。已移除这项不适合 headless 的断言，并将实际剪贴板验证明确列为 Windows GUI 手测；修正后的提交尚未获得新的 Actions 结果，不能记作已通过。
 - 修复结果查看器已有筛选、路径复制和报告校验的后台测试；实际 Windows GUI 的对话框排版与人工操作仍需验收。
 - 具体实现清单以 [已完成功能清单](REALHUMAN_STUDIO_COMPLETED.md) 为准。
 - 所有尚未完成或只有初步版本的目标以 [未完成与待实现功能清单](REALHUMAN_STUDIO_TODO.md) 为准。
