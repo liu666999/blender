@@ -1865,8 +1865,26 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
             key.slider_max = 1.0
             center_z = min_z + center_ratio * height
             sigma = max(height * sigma_ratio, 1e-6)
+
+            # Optional artist-authored vertex-group masks refine the broad
+            # vertical falloff without changing the default workflow.
+            mask_group = obj.vertex_groups.get("RH遮罩 | " + label)
+            mask_index = mask_group.index if mask_group is not None else None
+            mask_weights = None
+            if mask_index is not None:
+                mask_weights = []
+                for vertex in obj.data.vertices:
+                    mask_weight = 0.0
+                    for membership in vertex.groups:
+                        if membership.group == mask_index:
+                            mask_weight = membership.weight
+                            break
+                    mask_weights.append(max(0.0, min(1.0, mask_weight)))
+
             for index, co in enumerate(base_coords):
                 weight = math.exp(-0.5 * ((co.z - center_z) / sigma) ** 2)
+                if mask_weights is not None:
+                    weight *= mask_weights[index]
                 source = co
                 key.data[index].co = (
                     center_x + (source.x - center_x) * (1.0 + x_amount * weight),
@@ -1874,8 +1892,15 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
                     source.z,
                 )
         context.view_layer.update()
-        self.report({"INFO"}, "体型控制已就绪：新建 %d 个，更新 %d 个。滑块范围为 -1 到 1。" %
-                    (created, updated))
+        masked = sum(
+            1 for label in ("肩宽", "胸围", "腰围", "臀宽")
+            if obj.vertex_groups.get("RH遮罩 | " + label) is not None
+        )
+        self.report(
+            {"INFO"},
+            "体型控制已就绪：新建 %d 个，更新 %d 个，使用区域遮罩 %d 个。滑块范围为 -1 到 1。" %
+            (created, updated, masked)
+        )
         return {"FINISHED"}
 
 
