@@ -1072,6 +1072,25 @@ def run():
         ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
                "A zero-length quaternion should be rejected without replacing the current action.")
 
+        # Very large but finite quaternion components must not overflow during
+        # normalization and produce a zero rotation.
+        extreme_quaternion_path = os.path.join(tmp, "extreme_quaternion_action.json")
+        extreme_quaternion_payload = json.loads(json.dumps(action_payload))
+        extreme_bone_name = next(iter(extreme_quaternion_payload["frames"][0]["bones"]))
+        extreme_quaternion_payload["frames"][0]["bones"][extreme_bone_name][
+            "rotation_quaternion"] = [1e308, 1e308, 0.0, 0.0]
+        with open(extreme_quaternion_path, "w", encoding="utf-8") as stream:
+            json.dump(extreme_quaternion_payload, stream)
+        result = bpy.ops.rh_studio.import_action_json(filepath=extreme_quaternion_path)
+        ensure("FINISHED" in result,
+               "Large finite quaternion components should normalize safely.")
+        imported_action = rig_copy.animation_data.action
+        bpy.context.scene.frame_set(extreme_quaternion_payload["frames"][0]["frame"])
+        extreme_bone = rig_copy.pose.bones.get(extreme_bone_name)
+        ensure(extreme_bone is not None
+               and abs(sum(value * value for value in extreme_bone.rotation_quaternion) - 1.0) < 1e-4,
+               "Imported extreme quaternion should evaluate to a unit quaternion.")
+
         unordered_frames_path = os.path.join(tmp, "unordered_frames_action.json")
         unordered_frames_payload = json.loads(json.dumps(action_payload))
         ensure(len(unordered_frames_payload["frames"]) >= 2,
