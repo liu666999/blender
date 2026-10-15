@@ -50,7 +50,7 @@
 | Standard views and body-facing presets | Implemented in source; smoke-tested | GUI context and actual view orientation still need manual checks. |
 | Simple limb-clearance warning | Implemented in source; smoke-tested | A small set of bone-point distance heuristics, not mesh collision detection. |
 | Shape-key-based expression/body reactions | Implemented in source | Requires imported models to contain suitably named shape keys; it does not create facial anatomy or muscles. |
-| Minimal 2D stick-pose overlay | Implemented in source; keyframe helper smoke-tested | Circle head, simple body/limbs and four draggable endpoints; K records location, active rotation representation and scale for each pose bone. Existing Actions are not renamed; only a newly created Action receives the default `RealHuman Motion` name. The interactive modal overlay still requires GUI testing. |
+| Minimal 2D stick-pose overlay | Implemented in source; keyframe and small-viewport layout smoke-tested | Circle head, simple body/limbs and four draggable endpoints; K records location, active rotation representation and scale for each pose bone. Existing Actions are not renamed; only a newly created Action receives the default `RealHuman Motion` name. A source-level layout defect that could clip the head in the smallest accepted viewport was corrected by aligning the minimum height check and center calculation. Actual GPU drawing, mouse interaction, view navigation and playback still require GUI testing. |
 
 ## Not implemented or still incomplete
 
@@ -86,4 +86,4 @@ The headless smoke script exercises Python API paths, not real mouse input, GPU 
 
 ## Current recommendation
 
-Continue in small, testable increments: validate the first-stage body proportion controls on real human topology, then add region-aware proportion drivers, unit/orientation-aware asset normalization and repair tools, better rig deformation, and the missing clothing/anatomy workflows. Keep bundled third-party assets as a separate, license-reviewed milestone.
+Continue in the requested order: finish CI-backed action-set regression checks; validate optional region masks on real human topology; run the documented CC0 real-human mesh diagnostic and inspect it visually; then complete Windows GUI acceptance for the sidebar, result viewer, pose overlay, rig and materials. After those gates, continue with unit/orientation-aware asset repair, better rig deformation, and the missing clothing/anatomy workflows. Keep bundled third-party assets as a separate, license-reviewed milestone.
