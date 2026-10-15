@@ -969,6 +969,50 @@ def run():
                and imported_batch.get("objects", [{}])[0].get("name") == garment.name,
                "Import history batch metadata is incomplete or inaccurate.")
 
+        # A viewport-selection failure happens after the scene and manifest have
+        # committed. It must not roll back the imported asset or desynchronize the
+        # manifest from the scene.
+        selection_failure_source = os.path.join(tmp, "selection_failure_asset.fbx")
+        with open(selection_failure_source, "wb") as stream:
+            stream.write(b"selection failure fixture")
+        original_import_call = rh_operators._call_import_operator
+        original_select_imported = rh_operators._select_imported_objects
+        def create_asset_for_selection_failure(filepath):
+            mesh_data = bpy.data.meshes.new("RH_selection_failure_mesh")
+            imported_object = bpy.data.objects.new("RH_selection_failure_object", mesh_data)
+            bpy.context.scene.collection.objects.link(imported_object)
+            return {"FINISHED"}
+        def fail_import_selection(context, imported):
+            raise RuntimeError("injected viewport selection failure")
+        rh_operators._call_import_operator = create_asset_for_selection_failure
+        rh_operators._select_imported_objects = fail_import_selection
+        try:
+            try:
+                selection_failure_result = bpy.ops.rh_studio.import_asset(
+                    filepath=selection_failure_source, category="CLOTHING")
+            except RuntimeError:
+                selection_failure_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+            rh_operators._select_imported_objects = original_select_imported
+        ensure("FINISHED" in selection_failure_result,
+               "Viewport selection failure incorrectly cancelled a committed asset import.")
+        retained_imports = [
+            obj for obj in bpy.data.objects
+            if obj.get("rh_studio_source_path") == os.path.normpath(selection_failure_source)
+        ]
+        ensure(len(retained_imports) == 1,
+               "Viewport selection failure removed an already-imported asset.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            selection_manifest = json.load(stream)
+        selection_batches = [
+            entry for entry in selection_manifest.get("asset_sources", [])
+            if entry.get("source_path") == os.path.normpath(os.path.abspath(selection_failure_source))
+        ]
+        ensure(len(selection_batches) == 1
+               and selection_batches[0].get("object_count") == 1,
+               "Committed asset import and project manifest drifted after selection failure.")
+
         # Verify the portable action JSON round-trip against a second rig.
         # This bone uses Euler keys intentionally: export must serialize the
         # effective local rotation, not a stale rotation_quaternion property.
