@@ -118,6 +118,18 @@ def run():
 
     clean_scene()
 
+    # Invalid geometry must be rejected without leaving a partial Basis key behind.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+    flat_mesh = bpy.context.object
+    for vertex in flat_mesh.data.vertices:
+        vertex.co.z = 0.0
+    activate(flat_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("CANCELLED" in result, "Flat mesh should be rejected by body-proportion generation.")
+    ensure(flat_mesh.data.shape_keys is None,
+           "Rejected geometry must not be mutated by creating a stray Basis shape key.")
+    bpy.data.objects.remove(flat_mesh, do_unlink=True)
+
     # Build and update non-destructive body-proportion shape keys on an upright mesh.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(4.0, 0.0, 1.0))
     proportion_mesh = bpy.context.object
@@ -138,10 +150,17 @@ def run():
     ensure(any((shoulder_key.data[i].co - proportion_keys[0].data[i].co).length > 1e-5
                for i in range(len(proportion_mesh.data.vertices))),
            "Generated shoulder key does not change any vertex coordinates.")
+    custom_key = proportion_mesh.shape_key_add(name="User Custom", from_mix=False)
+    custom_key.data[0].co.x += 0.125
+    custom_key.value = 0.25
+    custom_coord = custom_key.data[0].co.copy()
     result = bpy.ops.rh_studio.generate_body_proportion_keys()
     ensure("FINISHED" in result, "Updating body proportion shape keys failed.")
     ensure(sum(1 for key in proportion_keys if key.name.startswith("RH体型 | ")) == 4,
            "Updating body proportion keys created duplicate controls.")
+    ensure((custom_key.data[0].co - custom_coord).length < 1e-6
+           and abs(custom_key.value - 0.25) < 1e-6,
+           "Updating body proportion keys modified an unrelated user shape key.")
     bpy.data.objects.remove(proportion_mesh, do_unlink=True)
 
     # Exercise the same rig-generation operator the UI calls, but disable
