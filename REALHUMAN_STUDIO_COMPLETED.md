@@ -84,3 +84,7 @@
 - 可读取的旧 run [38544308219](https://github.com/liu666999/blender/actions/runs/38544308219) 的 Python 语法 job 通过，但 Blender runtime job 在旧版 smoke test 的系统剪贴板精确值断言处失败。该失败属于旧代码，不能用来判断当前分支状态。
 - 当前已核对动作集保存操作符属性名 `action_set_name` 与持久化测试一致。这个检查只确认调用接口吻合，不替代 Blender 实际运行。
 - 当前分支没有任何功能获得本轮新增的 CI 通过或 GUI 验收结论；真实人体网格、简笔摆姿 GPU 绘制与 Windows 剪贴板行为仍待实测。
+## 动作集测试修正（2026-10-15）
+
+- 已改进 `tests/realhuman_studio_action_persistence.py`，对支持 layered Actions 的 Blender 版本显式绑定复制 Action 的 slot，并在保存前/重开后检查帧范围与 slot 关联。
+- 该项属于回归测试代码修正，已提交 `28e0aaeb8a889d966af007bfc26556d7e8615973`；尚未收到该提交对应的 CI 运行结果，不能记作测试通过。
