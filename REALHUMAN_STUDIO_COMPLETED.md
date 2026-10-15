@@ -197,3 +197,10 @@
 
 - smoke test 新增零长度四元数与重复帧号测试，验证无效动作文件在创建/替换 Action 前被拒绝。
 - 断言拒绝导入后骨架仍使用原 Action。测试提交 `95be5d54bb59cfc80b7c32e8b57903cfb48c4704`；尚未运行 Blender runtime。
+
+
+## 新增完成项（2026-10-15）
+
+- [x] 体型控制生成前检查所有基础顶点坐标是否为有限数；遇到 NaN/Infinity 时在任何形态键创建或更新前取消。
+- [x] smoke test 增加 NaN 输入回归断言，检查取消结果和无残留 Basis。
+- 相关提交：源码 `5edeafb4aad1c119e40332de7ff2fae39ff0f8d1`，测试 `107c119028f5f9ac9f76e6c2a5f6c77b2223c436`。代码与测试已提交，未获得 Blender runtime 结果。
