@@ -50,7 +50,7 @@
 | Standard views and body-facing presets | Implemented in source; smoke-tested | GUI context and actual view orientation still need manual checks. |
 | Simple limb-clearance warning | Implemented in source; smoke-tested | A small set of bone-point distance heuristics, not mesh collision detection. |
 | Shape-key-based expression/body reactions | Implemented in source | Requires imported models to contain suitably named shape keys; it does not create facial anatomy or muscles. |
-| Minimal 2D stick-pose overlay | Implemented in source | Circle head, simple body/limbs and four draggable endpoints; the interactive modal overlay requires GUI testing. |
+| Minimal 2D stick-pose overlay | Implemented in source; keyframe helper smoke-tested | Circle head, simple body/limbs and four draggable endpoints; K records location, active rotation representation and scale for each pose bone. Existing Actions are not renamed; only a newly created Action receives the default `RealHuman Motion` name. The interactive modal overlay still requires GUI testing. |
 
 ## Not implemented or still incomplete
 
