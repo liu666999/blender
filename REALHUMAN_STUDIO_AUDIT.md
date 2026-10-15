@@ -183,3 +183,9 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - 发现此前替换 `finally` 时误将导入回滚变量引用带入 `RH_OT_export_action_json`，这会在导出动作时触发异常路径。
 - 已在提交 `e32a8bf0e5d6806b395e0c5002118f477b812455` 中恢复导出操作符 finally：恢复原帧并更新视图层。导入操作符独立保留 `rollback_pose` 与 `pose_snapshot` 恢复。
 - 该问题来自最近编辑，尚无运行结果；当前 HEAD 需要完整 smoke runtime 验证。
+
+## 2026-10-15 测试审计补充：Action 泄漏检测
+
+- 测试此前仅检查“名称新增且 users==0”的 Action，可能漏掉仍有用户引用的残留 Action。
+- 已改为在故障注入前记录所有 Action 的 `as_pointer()`，失败后凡是出现新的 Action 数据块均判定为泄漏，不依赖名称或用户计数。
+- 提交：`0b33c70df8b7b21c9ad3aa501a39b09b847f2b91`。测试仍待实际 Blender runtime 执行。
