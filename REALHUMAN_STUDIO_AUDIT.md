@@ -231,3 +231,12 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **回归：** smoke test 注入 NaN 顶点，断言操作取消且未创建 Basis。
 - **提交：** 源码 `5edeafb4aad1c119e40332de7ff2fae39ff0f8d1`；测试 `107c119028f5f9ac9f76e6c2a5f6c77b2223c436`。
 - **验证状态：** 代码审查与测试编写已完成，当前分支尚无对应 Blender runtime/CI 结果。
+
+
+## 2026-10-15 审计补充：动作 JSON 四元数数值溢出
+
+- **风险：** 输入四元数各分量虽然都是有限浮点数，但直接计算 sum(q*q) 可能溢出为无穷；随后除以无穷会把所有分量变成零，破坏旋转数据。
+- **修复：** 先按最大绝对分量缩放，再计算缩放后长度并归一化。
+- **回归测试：** 使用 [1e308, 1e308, 0, 0] 输入，检查导入完成且采样旋转四元数长度约为 1。
+- **提交：** 源码 bbc69d6bf468d44b29025f6e96223ffe808e1e27；测试 b326d53e181ff749c9430826fde30d35f639890f。
+- **状态：** 源码和测试已提交，尚未有当前提交对应的 Blender runtime/CI 结果。
