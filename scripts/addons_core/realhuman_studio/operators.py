@@ -62,6 +62,12 @@ def _insert_action_json_keyframe(bone, data_path, frame, group):
     """Small seam for testing rollback after a partial action write."""
     return bone.keyframe_insert(data_path=data_path, frame=frame, group=group)
 
+
+
+def _copy_action_set_action(source):
+    """Small seam for fault-injection tests before replacing a saved action set."""
+    return source.copy()
+
     
 def _write_json_atomic(filepath, payload):
     """Write JSON atomically so serialization failures preserve an existing file."""
@@ -2833,17 +2839,44 @@ class RH_OT_save_action_set(bpy.types.Operator):
             while bpy.data.actions.get("%s (%d)" % (full_name, suffix)) is not None:
                 suffix += 1
             target_name = "%s (%d)" % (full_name, suffix)
-        elif existing is not None:
-            bpy.data.actions.remove(existing)
 
-        saved = source.copy()
-        saved.name = target_name
-        saved.use_fake_user = True
-        # Preserve which Action Slot the source rig was using. Actions can
-        # contain multiple slots of the same ID type, so blindly choosing the
-        # first slot when loading can silently select the wrong animation data.
-        if source_slot is not None:
-            saved["rh_studio_action_slot_identifier"] = source_slot.identifier
+        # Stage a complete copy before touching an existing saved set. If
+        # Blender fails to duplicate the Action (e.g. resource pressure), the
+        # old saved entry must remain available and unchanged.
+        saved = None
+        backup_name = None
+        try:
+            saved = _copy_action_set_action(source)
+            saved.name = "__RH_ACTION_SET_STAGING__" + uuid.uuid4().hex
+            saved.use_fake_user = True
+            # Preserve which Action Slot the source rig was using. Actions can
+            # contain multiple slots of the same ID type, so never guess on load.
+            if source_slot is not None:
+                saved["rh_studio_action_slot_identifier"] = source_slot.identifier
+
+            if existing is not None and real_users == 0:
+                backup_name = "__RH_ACTION_SET_BACKUP__" + uuid.uuid4().hex
+                existing.name = backup_name
+            saved.name = target_name
+        except Exception as exc:
+            if existing is not None and backup_name is not None:
+                try:
+                    existing.name = full_name
+                except (AttributeError, ReferenceError, RuntimeError):
+                    pass
+            if saved is not None:
+                try:
+                    bpy.data.actions.remove(saved)
+                except (ReferenceError, RuntimeError):
+                    pass
+            self.report({"ERROR"}, "保存动作集失败，原有动作集已尽量保留：" + str(exc))
+            return {"CANCELLED"}
+
+        if existing is not None and backup_name is not None:
+            try:
+                bpy.data.actions.remove(existing)
+            except (ReferenceError, RuntimeError) as exc:
+                self.report({"WARNING"}, "新动作集已保存，但旧副本清理失败：" + str(exc))
         if target_name != full_name:
             self.report({"WARNING"}, "同名动作集仍被其他对象使用，已安全另存为“%s”。" %
                         target_name[len(_ACTION_SET_PREFIX):])
