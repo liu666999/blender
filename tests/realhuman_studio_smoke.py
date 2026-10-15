@@ -271,6 +271,20 @@ def run():
     saved_action = bpy.data.actions.get("RH动作集 | CI Motion")
     ensure(saved_action is not None and saved_action.use_fake_user,
            "Named action set was not preserved in the .blend data.")
+
+    # A malformed layered source must not replace an already saved set. This
+    # specifically protects the validation-before-replacement ordering.
+    source_slots = getattr(rig.animation_data.action, "slots", None)
+    source_slot = getattr(rig.animation_data, "action_slot", None)
+    if source_slots is not None and len(source_slots) and source_slot is not None:
+        rig.animation_data.action_slot = None
+        rejected = bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion")
+        ensure("CANCELLED" in rejected,
+               "Saving a layered Action without an active slot should be rejected.")
+        ensure(bpy.data.actions.get("RH动作集 | CI Motion") == saved_action,
+               "Rejected save removed or replaced the previously saved action set.")
+        rig.animation_data.action_slot = source_slot
+
     rig_copy = rig.copy()
     rig_copy.data = rig.data.copy()
     bpy.context.scene.collection.objects.link(rig_copy)
