@@ -217,3 +217,8 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **修复：** 新增 `_copy_action_set_action` seam；先将副本写入唯一暂存名称、设置 fake user 和槽位元数据，再发布新名称。旧条目通过备份名暂存，只有新条目发布成功后才清理；异常时尝试恢复旧名称并删除暂存副本。
 - **回归测试：** 注入复制异常，断言操作取消、旧动作集对象及名称不变，且没有暂存/备份 Action 残留。
 - **状态：** 源码 `868f4265c96f8e26c0a0aef3f23ffb8dfcefb26d`，测试 `e0779a5d588f8f399221e322ed546783fa82f40f`。尚无 Blender runtime/CI 结果。
+
+## 2026-10-15 审计补充：动作 JSON 畸形数据
+
+- 新增零长度四元数与重复/非递增帧号回归用例，确保这类无效输入在动作写入前被拒绝，并且不会替换现有 Action。
+- 测试提交 `95be5d54bb59cfc80b7c32e8b57903cfb48c4704`。当前只确认测试源码已写入分支，Blender runtime 尚未执行。
