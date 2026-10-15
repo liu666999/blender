@@ -195,3 +195,5 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - smoke regression 增加非法 JSON 导入前后姿态不变断言。
 - 提交：源码 66306891541d0ddaa33dc8f3fdff8577e5dae7f1；测试 1d110d0456dc2374d5dc8037bcfb60b742f04784。
 - 当前尚无这些提交对应的 Blender runtime 结果；不标记为通过。
+
+- 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
