@@ -203,3 +203,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - 增加成功覆盖路径：用新动作 JSON 替换已有文件，解析结果并确认格式标记有效，同时检查场景帧恢复和临时文件清理。
 - 标准导出路径也检查原帧恢复。
 - 测试提交：`88ec8c6167f64182616b70007b99e630943b8a01`。当前只完成代码审查，尚无该提交对应的 Blender runtime 结果。
+
+## 2026-10-15 审计补充：资源清单导出保护（待运行验证）
+
+- **风险：** 所选资源清单直接以写模式打开目标文件；JSON 序列化中途失败可能截断已有报告。
+- **修复：** 新增 `_write_json_atomic`，在目标目录创建唯一临时文件，完成 JSON 序列化、flush 与 fsync 后通过 `os.replace` 替换目标，并在失败路径清理临时文件。
+- **回归测试：** 注入序列化异常，断言操作取消、旧文件字节内容不变且无临时文件残留；恢复正常序列化后断言 schema 与导出成功。
+- **状态：** 代码提交 `c95af719c116bfeb42fc14a3f5b5073f618c8849`，测试提交 `8e45299131a897ae26e7fb5d810a6d0ffc7ffcc0`。当前尚无对应 Blender runtime/CI 结果，不能标记通过。
