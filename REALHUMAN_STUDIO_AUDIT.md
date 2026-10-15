@@ -169,3 +169,7 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - 风险：在异常分支恢复骨骼后，`finally` 恢复原帧可能重新求值原 Action，覆盖刚恢复的姿态快照。
 - 修正：先恢复原帧，再重新应用 pose snapshot，最后更新视图层。
 - 提交：09b6537d62d2e333cb4b372d849211958039e552。尚无对应 runtime CI 结果。
+
+## 2026-10-15 复核发现
+
+此前记录了“恢复原帧后重放姿态”，但最新读取的源码显示 finally 分支当时未实际包含重放逻辑。已在提交 `672b374ce6530d83213b402c3e0a282d57a78f16` 中补齐。此项是实际实现修正，待当前提交触发的 Blender runtime 测试验证。
