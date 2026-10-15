@@ -121,3 +121,6 @@
 - 已将 smoke test 与 `.blend` 保存重开测试改为严格断言：保存的 identifier 必须能在复制/重开后的 Action 中解析到真实槽位，且骨架绑定必须指向该槽位；不再用 fallback 掩盖身份丢失。
 - 测试代码提交：`53dea5b582f6ea45b1246986e9520a95287fa2bb`、`94205d0294e9d36f8d0e326d2e751f0d1f004e4e`。
 - **状态：测试断言已加强，但当前没有这些提交对应的新 CI run；尚未运行验证，不代表通过。** 若 Blender 的 Action.copy 确实会改变 slot identifier，这组测试会暴露问题，再按运行日志修复实现。
+
+- 另新增 smoke regression：对支持 Action Slot 的版本，暂时解除源骨架的活动槽位后尝试保存同名动作集，要求操作被取消且旧动作集数据块仍保持原样；随后恢复原槽位。提交：`f3ff07b2f69a6bac028a71d99cb8e8cb91d340c3`。
+- 此新增用例仍需 Blender runtime 实际执行；若目标 Blender 不允许把 `action_slot` 设为 `None`，将依据运行日志调整测试构造方式。
