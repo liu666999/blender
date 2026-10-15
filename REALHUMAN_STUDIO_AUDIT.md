@@ -121,3 +121,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - smoke test 与 .blend 保存/重开测试已改为按保存的槽位身份检查，不再固定假设首槽位一定正确。
 - 本轮提交：`9b389edee2d94cdc181ad24626af4574d71ae89b`（保存/载入槽位身份）、`67e9048017d0796779980acfa8cc17b6d1954770`（smoke test）、`d625d591c6f872e447c225fe0800cde88c8ffadf`（重开验证）。
 - **状态：代码已提交，尚未在目标 Blender runtime 中执行；CI 结果仍待取得。** 本次修改没有被标记为测试通过。
+
+## 2026-10-15 补充：保存动作集前验证有效 Action Slot（待运行验证）
+
+- 代码审查发现：如果分层 Action 有槽位但骨架当前没有绑定有效槽位，保存流程会缺少可靠的源槽位身份，之后载入只能猜测。
+- 现在在任何同名动作集替换/删除之前，先验证当前动作的槽位绑定有效；不满足时明确取消保存并提示用户选择有效槽位，避免错误保存或破坏已有动作集。
+- 代码提交：`9d023b6731907643ca6fa56d8bc625987ad1a89f`。
+- **状态：仅代码已提交，尚未运行 Blender runtime/CI；不代表测试通过。** 下一步仍优先获取动作集 smoke test 与真实 `.blend` 保存/重开测试结果，再进入真实人体网格验证。
