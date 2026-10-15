@@ -143,3 +143,5 @@
 - [ ] 运行 smoke test，确认拒绝非法 JSON 不改变当前姿态。
 - [ ] 在 Blender 运行时验证异常路径对 Action Slot 的恢复行为；当前仅有源码级保护，尚未验证实际写入中途异常。
 - [ ] 成功运行 CI 后再更新状态。
+
+- 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
