@@ -94,8 +94,20 @@ action_slots = getattr(action, "slots", None)
 if action_slots is not None and len(action_slots):
     # Do not repair the slot here: the round-trip must preserve the binding
     # already stored in the .blend file.
-    ensure(rig.animation_data.action_slot == action_slots[0],
-           "The reopened rig did not preserve its copied Action slot binding.")
+    preferred_identifier = action.get("rh_studio_action_slot_identifier", "")
+    expected_slot = next(
+        (slot for slot in action_slots
+         if preferred_identifier and slot.identifier == preferred_identifier),
+        None,
+    )
+    if expected_slot is None:
+        expected_slot = next(
+            (slot for slot in action_slots
+             if getattr(slot, "target_id_type", "OBJECT") == "OBJECT"),
+            action_slots[0],
+        )
+    ensure(rig.animation_data.action_slot == expected_slot,
+           "The reopened rig did not preserve the named Action Slot binding.")
 ensure(action.frame_range[0] <= 1 and action.frame_range[1] >= 13,
        "Keyed frame range did not survive .blend reopen.")
 bpy.context.scene.frame_set(13)
