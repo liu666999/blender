@@ -147,3 +147,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **状态：** 源码与测试已提交，未取得最新 Blender runtime CI 结果；仍待自动化执行与实际 GUI 验收。
 
 - 测试隔离注意：保留元数据的用例会在断言后重置 asset_sources 为空，避免影响后续导入历史追加测试；提交 5d2b0dba115826f6dc8fcb74869f0e29aa8fa9bc，尚未运行验证。
+
+## 审计补充：动作 JSON 导入回滚（待验证）
+
+- **风险：** 动作导入写入过程中若抛出异常，旧实现仅恢复 Action datablock，可能遗留部分骨骼姿态修改。
+- **修复：** 保存全骨架变换快照；异常时恢复原 Action、可用的 Action Slot 与骨骼姿态，并清理无用户的临时 Action。
+- **回归：** 非法 JSON 导入应保持当前姿态不变。
+- **状态：** 已提交源码和测试，但尚未取得 Blender runtime 结果；真实写入中断路径仍待专门注入故障验证。
