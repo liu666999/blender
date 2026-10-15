@@ -5,12 +5,16 @@ on:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
       - "tests/realhuman_studio_smoke.py"
+      - "tests/realhuman_studio_real_mesh_validation.py"
+      - "REALHUMAN_STUDIO_ASSET_SOURCES.md"
       - "source/blender/blenkernel/BKE_blender_version.h"
       - ".github/workflows/realhuman-studio-static.yml"
   pull_request:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
       - "tests/realhuman_studio_smoke.py"
+      - "tests/realhuman_studio_real_mesh_validation.py"
+      - "REALHUMAN_STUDIO_ASSET_SOURCES.md"
       - "source/blender/blenkernel/BKE_blender_version.h"
       - ".github/workflows/realhuman-studio-static.yml"
 
