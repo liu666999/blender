@@ -180,3 +180,9 @@
 ## 2026-10-15 导出测试扩展
 
 新增断言：动作 JSON 导出成功/失败都必须恢复调用前的场景帧；成功导出到已存在的 JSON 时必须替换旧内容为有效的 `realhuman_studio_action_v1` 数据，且不留下临时文件。提交：`88ec8c6167f64182616b70007b99e630943b8a01`。当前仍待 Blender runtime 实测。
+
+## 新增实现（2026-10-15，待运行验证）
+
+- 资源清单导出使用 `_write_json_atomic`，避免 JSON 序列化或写盘中断截断已有 `asset_manifest.json`。
+- smoke test 新增失败注入与正常导出回归，检查目标内容保留、schema 正确及临时文件不残留。
+- 该功能源码和测试已提交；运行状态仍为待 Blender runtime/CI 验证。
