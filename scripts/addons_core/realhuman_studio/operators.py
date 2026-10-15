@@ -62,6 +62,23 @@ def _insert_action_json_keyframe(bone, data_path, frame, group):
     """Small seam for testing rollback after a partial action write."""
     return bone.keyframe_insert(data_path=data_path, frame=frame, group=group)
 
+    
+def _write_json_atomic(filepath, payload):
+    """Write JSON atomically so serialization failures preserve an existing file."""
+    filepath = os.path.abspath(filepath)
+    os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+    temp_path = filepath + ".tmp-" + uuid.uuid4().hex
+    try:
+        with open(temp_path, "x", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_path, filepath)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
 
 def record_project_import(scene, filepath, category, objects, batch_id, imported_at):
     """Append one successful import batch to an existing project manifest.
@@ -387,10 +404,7 @@ class RH_OT_export_asset_manifest(bpy.types.Operator):
         }
         filepath = os.path.abspath(bpy.path.abspath(self.filepath))
         try:
-            os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
-            with open(filepath, "w", encoding="utf-8") as stream:
-                json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
-                stream.write("\n")
+            _write_json_atomic(filepath, manifest)
         except (OSError, TypeError, ValueError) as exc:
             self.report({"ERROR"}, "写入资源清单失败：" + str(exc))
             return {"CANCELLED"}
