@@ -875,7 +875,7 @@ def run():
             data_path="rotation_euler", frame=bpy.context.scene.frame_current)
         # An interrupted JSON serialization must not truncate a previous export.
         preserved_export_path = os.path.join(tmp, "preserved_export.json")
-        preserved_export_contents = "{\\\"keep\\\": \\\"old export\\\"}\\n"
+        preserved_export_contents = '{"keep": "old export"}\n'
         with open(preserved_export_path, "w", encoding="utf-8") as stream:
             stream.write(preserved_export_contents)
         original_json_dump = rh_operators.json.dump
