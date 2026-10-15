@@ -102,3 +102,7 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 
 - 测试脚本已对具有 `slots` 集合的复制 Action 显式设置 `rig.animation_data.action_slot`，避免仅赋值 `animation_data.action` 却未绑定 slot 的测试假阴性；在重开验证中同样检查 slot 关联与第 13 帧通道求值。
 - 这项是测试可靠性修正，不是功能验收结论。提交 `28e0aaeb8a889d966af007bfc26556d7e8615973` 的 CI 尚未返回；如果目标 Blender 构建的 API 行为不同，应按日志调整，而不是跳过失败。
+## 最新代码与运行证据（2026-10-15）
+
+- 最近的测试代码提交为 `28e0aaeb8a889d966af007bfc26556d7e8615973`；最近 HEAD 为文档更新提交。Actions API 中没有该测试提交的运行，因此 Action slot 的修改尚未得到运行时验证。
+- 本轮工具集没有 workflow dispatch 写入操作。测试需由仓库管理员/有权限用户在 [Actions 页面](https://github.com/liu666999/blender/actions/workflows/realhuman-studio-static.yml) 手动启动；获得运行日志后再继续修复。不要把没有触发的 CI 记作通过。
