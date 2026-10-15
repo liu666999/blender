@@ -3137,6 +3137,23 @@ class RH_OT_body_reaction_preset(bpy.types.Operator):
 
 
 
+def _insert_rig_pose_keyframes(rig, frame):
+    """Insert the active rotation representation, location, and scale for every pose bone."""
+    inserted = 0
+    for bone in rig.pose.bones:
+        if bone.rotation_mode == "QUATERNION":
+            path = "rotation_quaternion"
+        elif bone.rotation_mode == "AXIS_ANGLE":
+            path = "rotation_axis_angle"
+        else:
+            path = "rotation_euler"
+        bone.keyframe_insert(data_path=path, frame=frame, group=bone.name)
+        bone.keyframe_insert(data_path="location", frame=frame, group=bone.name)
+        bone.keyframe_insert(data_path="scale", frame=frame, group=bone.name)
+        inserted += 1
+    return inserted
+
+
 # ---------------------------------------------------------------------------
 # Minimal 2D pose pad: circle head + large-character body, with four drag handles.
 # The drawing is rendered into the 3D VIEW region, not the sidebar region.
@@ -3349,20 +3366,14 @@ class RH_OT_simple_2d_pose_pad(bpy.types.Operator):
             self.report({"ERROR"}, "当前骨架不可用，无法记录关键帧。")
             return False
         frame = context.scene.frame_current
-        inserted = 0
-        for bone in rig.pose.bones:
-            if bone.rotation_mode == "QUATERNION":
-                path = "rotation_quaternion"
-            elif bone.rotation_mode == "AXIS_ANGLE":
-                path = "rotation_axis_angle"
-            else:
-                path = "rotation_euler"
-            bone.keyframe_insert(data_path=path, frame=frame, group=bone.name)
-            bone.keyframe_insert(data_path="location", frame=frame, group=bone.name)
-            inserted += 1
-        if rig.animation_data and rig.animation_data.action:
-            rig.animation_data.action.name = "RealHuman Motion"
-        self.report({"INFO"}, "已记录第 %d 帧的 %d 根骨骼姿势。可切换时间轴帧继续摆姿。" %
+        previous_action = rig.animation_data.action if rig.animation_data else None
+        inserted = _insert_rig_pose_keyframes(rig, frame)
+        current_action = rig.animation_data.action if rig.animation_data else None
+        # Name only an Action created by this operation. Renaming a pre-existing
+        # Action can unexpectedly change its name for every object sharing it.
+        if current_action is not None and current_action is not previous_action:
+            current_action.name = "RealHuman Motion"
+        self.report({"INFO"}, "已记录第 %d 帧的 %d 根骨骼姿势（位置、旋转、缩放）。可切换时间轴帧继续摆姿。" %
                     (frame, inserted))
         return True
 
