@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
       - "tests/realhuman_studio_smoke.py"
+      - "tests/realhuman_studio_action_persistence.py"
       - "tests/realhuman_studio_real_mesh_validation.py"
       - "REALHUMAN_STUDIO_ASSET_SOURCES.md"
       - "source/blender/blenkernel/BKE_blender_version.h"
@@ -14,6 +15,7 @@ on:
     paths:
       - "scripts/addons_core/realhuman_studio/**"
       - "tests/realhuman_studio_smoke.py"
+      - "tests/realhuman_studio_action_persistence.py"
       - "tests/realhuman_studio_real_mesh_validation.py"
       - "REALHUMAN_STUDIO_ASSET_SOURCES.md"
       - "source/blender/blenkernel/BKE_blender_version.h"
@@ -32,7 +34,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile Python files
-        run: python -m compileall -q scripts/addons_core/realhuman_studio tests/realhuman_studio_smoke.py
+        run: python -m compileall -q scripts/addons_core/realhuman_studio tests
 
   blender-runtime:
     runs-on: ubuntu-latest
@@ -63,7 +65,7 @@ jobs:
               header = source.read()
 
           def macro(name, default=None):
-              match = re.search(r"^#define\s+" + re.escape(name) + r"\s+([A-Za-z0-9_]+)", header, re.MULTILINE)
+              match = re.search(r"^#define\\s+" + re.escape(name) + r"\\s+([A-Za-z0-9_]+)", header, re.MULTILINE)
               if not match:
                   if default is not None:
                       return default
@@ -120,9 +122,9 @@ jobs:
               )
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"version={version}\n")
-              output.write(f"url={candidates[0]}\n")
-              output.write(f"cycle={cycle}\n")
+              output.write(f"version={version}\\n")
+              output.write(f"url={candidates[0]}\\n")
+              output.write(f"cycle={cycle}\\n")
 
           print(f"Source branch version: {version} ({cycle})")
           print(f"Runtime archive: {candidates[0]}")
@@ -149,5 +151,18 @@ jobs:
           set -e
           if [ "$BLENDER_STATUS" -ne 0 ] || ! grep -q "^REALHUMAN_STUDIO_SMOKE_TEST: PASS$" "$LOG_FILE"; then
             echo "Blender runtime smoke test did not reach its PASS marker."
+            exit 1
+          fi
+      - name: Verify action-set persistence across .blend reopen
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/realhuman-studio-action-persistence.log"
+          set +e
+          "$RUNNER_TEMP/blender-runtime/blender" --background --factory-startup --python tests/realhuman_studio_action_persistence.py 2>&1 | tee "$LOG_FILE"
+          BLENDER_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$BLENDER_STATUS" -ne 0 ] || ! grep -q "^REALHUMAN_STUDIO_ACTION_PERSISTENCE: PASS$" "$LOG_FILE"; then
+            echo "Action persistence round-trip test did not reach its PASS marker."
             exit 1
           fi
