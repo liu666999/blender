@@ -398,6 +398,45 @@ def run():
            "Regional print should affect only the selected face.")
     bpy.data.objects.remove(region_mesh, do_unlink=True)
 
+    # Asset manifest export must preserve a prior report if JSON serialization fails.
+    activate(garment)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_manifest_atomic_") as manifest_tmp:
+        manifest_path = os.path.join(manifest_tmp, "asset_manifest.json")
+        preserved_manifest = "keep previous manifest exactly\\n"
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            stream.write(preserved_manifest)
+        original_dump = rh_operators.json.dump
+
+        def fail_manifest_dump(payload, stream, **kwargs):
+            if isinstance(payload, dict) and payload.get("schema") == "realhuman_studio_asset_manifest_v1":
+                raise ValueError("injected asset-manifest serialization failure")
+            return original_dump(payload, stream, **kwargs)
+
+        rh_operators.json.dump = fail_manifest_dump
+        try:
+            failed_export = bpy.ops.rh_studio.export_asset_manifest(filepath=manifest_path)
+        finally:
+            rh_operators.json.dump = original_dump
+        ensure("CANCELLED" in failed_export,
+               "Asset manifest export should report serialization failure.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            ensure(stream.read() == preserved_manifest,
+                   "Failed asset manifest serialization overwrote the previous report.")
+        ensure(not any(name.startswith("asset_manifest.json.tmp-")
+                       for name in os.listdir(manifest_tmp)),
+               "Failed asset manifest export left a temporary file behind.")
+
+        successful_export = bpy.ops.rh_studio.export_asset_manifest(filepath=manifest_path)
+        ensure("FINISHED" in successful_export and os.path.isfile(manifest_path),
+               "Asset manifest export did not succeed after restoring JSON serialization.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest_payload = json.load(stream)
+        ensure(manifest_payload.get("schema") == "realhuman_studio_asset_manifest_v1",
+               "Successful asset manifest export wrote the wrong schema.")
+        ensure(not any(name.startswith("asset_manifest.json.tmp-")
+                       for name in os.listdir(manifest_tmp)),
+               "Successful asset manifest export left a temporary file behind.")
+
     # Selected asset audit should create a portable JSON report with real mesh statistics.
     activate(garment)
     with tempfile.TemporaryDirectory(prefix="rh_studio_asset_audit_") as audit_tmp:
