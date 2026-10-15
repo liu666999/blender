@@ -88,3 +88,7 @@
 
 - 已改进 `tests/realhuman_studio_action_persistence.py`，对支持 layered Actions 的 Blender 版本显式绑定复制 Action 的 slot，并在保存前/重开后检查帧范围与 slot 关联。
 - 该项属于回归测试代码修正，已提交 `28e0aaeb8a889d966af007bfc26556d7e8615973`；尚未收到该提交对应的 CI 运行结果，不能记作测试通过。
+## 最新提交与 CI 触发状态（2026-10-15）
+
+- 最近的功能/测试代码提交是 `28e0aaeb8a889d966af007bfc26556d7e8615973`（Action slot 往返测试修正）；分支最新 HEAD `991ffe22332304f1ea29816fdbaaf8e65448f3c6` 是文档状态同步。
+- 已重新查询 Actions API，未找到针对上述代码提交的新运行。当前不能把 Action slot 测试记为 CI 通过；需要在 [Actions 工作流页面](https://github.com/liu666999/blender/actions/workflows/realhuman-studio-static.yml) 手动运行，或通过有权限的 workflow dispatch 方式触发。
