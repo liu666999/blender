@@ -54,7 +54,8 @@
 
 ## 5. 自动化测试与文档
 
-- Blender 后台 smoke test 覆盖多个资源管理、尺寸校准、形态键、骨架、动作、修复和报告路径。
+- Blender 后台 smoke test 覆盖多个资源管理、尺寸校准、形态键、骨架、动作、修复和报告路径。动作集测试新增编号副本持久化、载入后跳到首个关键帧、以及载入后缩放关键帧求值检查。
+- **真实人体网格验证辅助脚本：** `tests/realhuman_studio_real_mesh_validation.py` 可在 Blender GUI 中对选中的真实人体网格生成/更新体型控制并输出 JSON 诊断；官方候选资源及许可记录在 `REALHUMAN_STUDIO_ASSET_SOURCES.md`。该脚本尚未在真实人体资产上运行，不能视为视觉验收通过。
 - 修复结果查看器 helper 测试覆盖 ALL/repaired/skipped/failed 筛选、格式错误行过滤、有效报告、错误 schema、缺失报告。
 - 剪贴板操作符在后台测试中验证可被调用且正常结束；无头 Blender 不能可靠验证系统剪贴板内容，实际复制/粘贴行为需在 Windows GUI 中复核。
 - 最近一次查看器交互测试的 GitHub Actions 运行中，`python-syntax` 通过，`blender-runtime` 因无头环境下系统剪贴板内容不可可靠验证而失败。已移除不适合 headless 的剪贴板内容断言；修正后的提交目前尚无新的 Actions 结果，因此不能宣称该轮运行通过。
