@@ -58,6 +58,11 @@ def move_objects_to_category(objects, scene, category, source_path=""):
             obj["rh_studio_source_path"] = os.path.normpath(source_path)
     return target
 
+def _insert_action_json_keyframe(bone, data_path, frame, group):
+    """Small seam for testing rollback after a partial action write."""
+    return bone.keyframe_insert(data_path=data_path, frame=frame, group=group)
+
+
 def record_project_import(scene, filepath, category, objects, batch_id, imported_at):
     """Append one successful import batch to an existing project manifest.
 
@@ -3066,9 +3071,9 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
                     bone.rotation_mode = "QUATERNION"
                     bone.rotation_quaternion = values["rotation_quaternion"]
                     bone.scale = values["scale"]
-                    bone.keyframe_insert(data_path="location", frame=frame, group=name)
-                    bone.keyframe_insert(data_path="rotation_quaternion", frame=frame, group=name)
-                    bone.keyframe_insert(data_path="scale", frame=frame, group=name)
+                    _insert_action_json_keyframe(bone, "location", frame, name)
+                    _insert_action_json_keyframe(bone, "rotation_quaternion", frame, name)
+                    _insert_action_json_keyframe(bone, "scale", frame, name)
             new_action = rig.animation_data.action
             if new_action is None:
                 raise RuntimeError("Blender 未创建动画 Action。")
