@@ -982,7 +982,7 @@ def run():
         action_before_write_failure = rig_copy.animation_data.action
         try:
             try:
-                result = bpy.ops.rh_studio.import_action_json(filepath=action_json_path)
+                result = bpy.ops.rh_studio.import_action_json(filepath=json_path)
             except RuntimeError:
                 result = {"CANCELLED"}
         finally:
