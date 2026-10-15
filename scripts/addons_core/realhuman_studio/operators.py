@@ -154,24 +154,51 @@ class RH_OT_setup_project(bpy.types.Operator):
             return {"CANCELLED"}
         base = os.path.abspath(bpy.path.abspath(self.project_root or "//"))
         project_dir = os.path.join(base, name)
+        manifest_path = os.path.join(project_dir, "realhuman_project.json")
         folders = ("models", "anatomy", "clothing", "textures", "exports", "logs")
+
+        # Never overwrite a project's existing manifest: it may contain import
+        # history or user-defined metadata. Validate it before creating folders.
+        existing_manifest = None
+        if os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as stream:
+                    existing_manifest = json.load(stream)
+                if not isinstance(existing_manifest, dict):
+                    raise ValueError("项目清单根节点必须是 JSON 对象")
+                if existing_manifest.get("application") != "RealHuman Studio":
+                    raise ValueError("现有清单不属于 RealHuman Studio，拒绝覆盖")
+                if not isinstance(existing_manifest.get("asset_sources", []), list):
+                    raise ValueError("asset_sources 必须是 JSON 数组")
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                self.report({"ERROR"}, "现有项目清单无效，未覆盖任何数据：" + str(exc))
+                return {"CANCELLED"}
+
         try:
             os.makedirs(project_dir, exist_ok=True)
             for folder in folders:
                 os.makedirs(os.path.join(project_dir, folder), exist_ok=True)
-            manifest = {
-                "schema_version": 1, "application": "RealHuman Studio",
-                "project_name": name, "blender_version": bpy.app.version_string,
-                "created_folders": list(folders), "asset_sources": [],
-            }
-            with open(os.path.join(project_dir, "realhuman_project.json"), "w", encoding="utf-8") as stream:
-                json.dump(manifest, stream, ensure_ascii=False, indent=2)
-                stream.write("\n")
-        except OSError as exc:
-            self.report({"ERROR"}, "无法创建项目目录：" + str(exc))
+            if existing_manifest is None:
+                manifest = {
+                    "schema_version": 1, "application": "RealHuman Studio",
+                    "project_name": name, "blender_version": bpy.app.version_string,
+                    "created_folders": list(folders), "asset_sources": [],
+                }
+                temp_path = manifest_path + "." + uuid.uuid4().hex + ".tmp"
+                try:
+                    with open(temp_path, "w", encoding="utf-8") as stream:
+                        json.dump(manifest, stream, ensure_ascii=False, indent=2, allow_nan=False)
+                        stream.write("\n")
+                    os.replace(temp_path, manifest_path)
+                finally:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+        except (OSError, TypeError, ValueError) as exc:
+            self.report({"ERROR"}, "无法创建项目目录或清单：" + str(exc))
             return {"CANCELLED"}
         context.scene.rh_studio_project_root = project_dir + os.sep
-        self.report({"INFO"}, "项目已创建：" + project_dir)
+        message = "项目已创建：" if existing_manifest is None else "已复用现有项目并保留清单："
+        self.report({"INFO"}, message + project_dir)
         return {"FINISHED"}
 
 class RH_OT_create_layers(bpy.types.Operator):
