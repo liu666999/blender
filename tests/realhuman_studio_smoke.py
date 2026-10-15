@@ -1046,6 +1046,34 @@ def run():
         ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
                "Unsupported rotation representations should be rejected without replacing the current action.")
 
+        invalid_quaternion_path = os.path.join(tmp, "invalid_quaternion_action.json")
+        invalid_quaternion_payload = json.loads(json.dumps(action_payload))
+        first_bone_name = next(iter(invalid_quaternion_payload["frames"][0]["bones"]))
+        invalid_quaternion_payload["frames"][0]["bones"][first_bone_name][
+            "rotation_quaternion"] = [0.0, 0.0, 0.0, 0.0]
+        with open(invalid_quaternion_path, "w", encoding="utf-8") as stream:
+            json.dump(invalid_quaternion_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_quaternion_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "A zero-length quaternion should be rejected without replacing the current action.")
+
+        unordered_frames_path = os.path.join(tmp, "unordered_frames_action.json")
+        unordered_frames_payload = json.loads(json.dumps(action_payload))
+        ensure(len(unordered_frames_payload["frames"]) >= 2,
+               "Action JSON fixture must contain at least two sampled frames.")
+        unordered_frames_payload["frames"][1]["frame"] = unordered_frames_payload["frames"][0]["frame"]
+        with open(unordered_frames_path, "w", encoding="utf-8") as stream:
+            json.dump(unordered_frames_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=unordered_frames_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Duplicate or unordered frame numbers should be rejected without replacing the current action.")
+
         # Validation failure must not mutate the rig's current pose either.
         activate(rig_copy)
         protected_bone = rig_copy.pose.bones["forearm.R"]
