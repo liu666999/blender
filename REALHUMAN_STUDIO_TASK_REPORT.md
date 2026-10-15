@@ -125,7 +125,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 
 ## 2026-10-15 补充：本轮进度与 CI 证据核对
 
-- 已直接检查分支 `feature/realhuman-studio-phase1` 代码提交快照：`659592ae6b22adb50e4031191ae1037cfae66d2e`（后续提交仅更新了进度文档）。本轮没有发现以该代码快照为测试提交的最新 Actions 运行，因此动作集文件往返、负值遮罩 smoke test 和真实网格脚本均不能标记为 CI 通过。
+- 已直接检查分支 `feature/realhuman-studio-phase1` 代码提交快照：`28e0aaeb8a889d966af007bfc26556d7e8615973`（动作集 slot 往返测试修正；后续提交为文档状态同步）。本轮没有发现以该代码快照为测试提交的最新 Actions 运行，因此动作集文件往返、负值遮罩 smoke test 和真实网格脚本均不能标记为 CI 通过。
 - 核查到可读取的旧 Actions run `38544308219` 实际使用旧合并提交 `1a04a8b2c1c1ac09d5b1f526d1888fe590699e0e`；`python-syntax` 成功，`blender-runtime` 失败，原因是旧版 `tests/realhuman_studio_smoke.py` 第 111 行断言无头 Blender 系统剪贴板必须精确匹配。这个结果发生在剪贴板断言移除之前，不能作为当前 HEAD 的失败或通过证据。运行记录：[Actions run 38544308219](https://github.com/liu666999/blender/actions/runs/38544308219)。
 - 已确认动作集保存 operator 的参数名是 `action_set_name`，与往返测试调用一致；测试会另起 Blender 进程打开保存的 `.blend`，核对 fake-user、动作绑定和第 13 帧缩放值。此项目前只是代码检查，尚未获得目标 Blender 构建上的实际运行结果。
 - 下一步仍按顺序推进：先让当前代码在 CI 中得到真实结果并修复失败；随后在真实人体网格上运行诊断；最后做 Windows GUI 验收。文档中的“已实现”不代表 GUI 已验收。
@@ -141,3 +141,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 复查 Blender 4.4+ 的 layered Action 工作流后，发现往返测试只给骨架分配了 Action，没有显式绑定复制 Action 的 slot，可能导致测试不能正确评估关键帧通道。已更新 `tests/realhuman_studio_action_persistence.py`：若 Action 暴露 `slots`，保存前测试场景与重开后的验证场景都会显式绑定首个 slot，并检查复制动作的帧范围及重开后的 slot 绑定。
 - 代码提交：`28e0aaeb8a889d966af007bfc26556d7e8615973`。该文件属于 workflow 的触发路径，预期会触发 CI；但本次回复时尚未看到新运行结果，所以只记录为测试代码修正，不标记为通过。
 - 风险边界：首个 slot 的绑定适用于本测试创建的单骨架/单动作场景；后续仍需用目标分支对应 Blender 构建验证真实 API 行为。
+## 2026-10-15 补充：本轮触发情况复核
+
+- 动作集 slot 修正已提交到被 workflow 路径过滤器覆盖的测试文件；但复查 Actions API 后，仍未出现该代码提交对应的新 run。当前可用 GitHub 工具没有创建 `workflow_dispatch` 运行的动作，因此本轮不能声称已触发或通过 CI。需在仓库 Actions 页面手动运行 `RealHuman Studio checks` 工作流，或通过具有 Actions 写入权限的方式触发。
+- 最新分支 HEAD 是文档同步提交 `d30b568ee7894c4756287a919bd8e9cc6b6850bb`；最近功能/测试代码提交为 `28e0aaeb8a889d966af007bfc26556d7e8615973`。
