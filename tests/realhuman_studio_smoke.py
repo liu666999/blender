@@ -118,6 +118,18 @@ def run():
 
     clean_scene()
 
+    # Non-finite coordinates must be rejected before any shape-key mutation.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+    nonfinite_mesh = bpy.context.object
+    nonfinite_mesh.data.vertices[0].co.x = float("nan")
+    activate(nonfinite_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("CANCELLED" in result,
+           "Mesh with a NaN coordinate should be rejected by body-proportion generation.")
+    ensure(nonfinite_mesh.data.shape_keys is None,
+           "Non-finite geometry rejection must not create a partial Basis shape key.")
+    bpy.data.objects.remove(nonfinite_mesh, do_unlink=True)
+
     # Invalid geometry must be rejected without leaving a partial Basis key behind.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
     flat_mesh = bpy.context.object
