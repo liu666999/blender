@@ -940,6 +940,28 @@ def run():
         ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
                "Unsupported rotation representations should be rejected without replacing the current action.")
 
+        # Validation failure must not mutate the rig's current pose either.
+        activate(rig_copy)
+        protected_bone = rig_copy.pose.bones["forearm.R"]
+        protected_bone.location = (0.31, -0.12, 0.27)
+        protected_bone.rotation_mode = "XYZ"
+        protected_bone.rotation_euler = (0.11, -0.23, 0.37)
+        protected_bone.scale = (1.1, 0.9, 1.2)
+        pose_before_rejected_import = (
+            tuple(protected_bone.location), protected_bone.rotation_mode,
+            tuple(protected_bone.rotation_euler), tuple(protected_bone.scale),
+        )
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_json_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        pose_after_rejected_import = (
+            tuple(protected_bone.location), protected_bone.rotation_mode,
+            tuple(protected_bone.rotation_euler), tuple(protected_bone.scale),
+        )
+        ensure("CANCELLED" in result and pose_after_rejected_import == pose_before_rejected_import,
+               "Rejected action JSON changed the current pose.")
+
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties were not unregistered.")
