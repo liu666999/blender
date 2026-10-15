@@ -1875,6 +1875,13 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
         if not base_coords:
             self.report({"ERROR"}, "当前网格没有顶点。")
             return {"CANCELLED"}
+        # NaN/Infinity coordinates can silently poison bounds, falloff weights,
+        # and every generated key. Reject them before creating Basis or touching
+        # any existing shape key so invalid imports remain unchanged.
+        if any(not (math.isfinite(co.x) and math.isfinite(co.y) and math.isfinite(co.z))
+               for co in base_coords):
+            self.report({"ERROR"}, "网格包含 NaN 或无穷坐标，未修改任何形态键。")
+            return {"CANCELLED"}
 
         min_x = min(co.x for co in base_coords)
         max_x = max(co.x for co in base_coords)
