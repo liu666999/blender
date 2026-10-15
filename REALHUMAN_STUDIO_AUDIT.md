@@ -92,3 +92,9 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 ## 2026-10-15 补充：动作集真实文件往返
 
 新增 `tests/realhuman_studio_action_persistence.py`，以第二个 Blender 进程重开临时 `.blend`，核验命名动作集、fake-user 标记、骨架动作绑定与关键帧数值。CI 现已包含该脚本并编译整个 `tests` 目录。当前仅代表测试已编写并接入工作流；最新分支尚无对应 Actions 结果，不能记作运行通过。
+## 2026-10-15 状态核对补充
+
+- 已检查当前分支 HEAD `659592ae6b22adb50e4031191ae1037cfae66d2e` 与可见 Actions 运行记录。当前没有以该 HEAD 为测试提交的最新运行结果，不能宣称最近一轮测试通过。
+- 旧运行 [38544308219](https://github.com/liu666999/blender/actions/runs/38544308219) 中 `python-syntax` 通过，`blender-runtime` 因旧版 smoke test 断言系统剪贴板精确内容而失败。剪贴板是无头环境限制，不应由后台 CI 检验真实系统剪贴板值；应在 Windows GUI 中手动复制并粘贴确认。
+- 已静态核对动作集保存操作符 `action_set_name` 参数名与 `.blend` 往返测试调用一致。动作持久化测试仍需由匹配分支版本的 Blender 实际执行，之后才可更新为测试通过。
+- 真实人体形态键、遮罩边界、骨架/服装穿插、简笔摆姿 GPU overlay 与侧栏布局仍分别需要真实人体数据或 GUI 验收。自动化几何位移指标只能证明网格坐标发生变化，不证明人体解剖或视觉质量合格。
