@@ -272,6 +272,31 @@ def run():
     ensure(saved_action is not None and saved_action.use_fake_user,
            "Named action set was not preserved in the .blend data.")
 
+    # A failed Action copy must not delete or rename an existing saved set.
+    replace_failure_action = rig.animation_data.action.copy()
+    replace_failure_action.name = "RH动作集 | CI Replace Failure"
+    replace_failure_action.use_fake_user = True
+    original_copy_helper = rh_operators._copy_action_set_action
+
+    def fail_action_set_copy(source_action):
+        raise RuntimeError("injected action-copy failure")
+
+    rh_operators._copy_action_set_action = fail_action_set_copy
+    try:
+        failed_save = bpy.ops.rh_studio.save_action_set(
+            action_set_name="CI Replace Failure")
+    finally:
+        rh_operators._copy_action_set_action = original_copy_helper
+    ensure("CANCELLED" in failed_save,
+           "Action-set copy failure should cancel the save operation.")
+    ensure(bpy.data.actions.get("RH动作集 | CI Replace Failure") == replace_failure_action
+           and replace_failure_action.name == "RH动作集 | CI Replace Failure",
+           "Failed Action-set copy deleted or renamed the existing saved set.")
+    ensure(not any(action.name.startswith("__RH_ACTION_SET_STAGING__")
+                   or action.name.startswith("__RH_ACTION_SET_BACKUP__")
+                   for action in bpy.data.actions),
+           "Failed Action-set copy left staging or backup Actions behind.")
+
     # A malformed layered source must not replace an already saved set. This
     # specifically protects the validation-before-replacement ordering.
     source_slots = getattr(rig.animation_data.action, "slots", None)
