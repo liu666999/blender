@@ -225,3 +225,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ## 2026-10-15 补强：动作导入回滚的 Action 泄漏断言
 
 将 smoke test 的失败路径检查从“只查新增且 users==0 的 Action”收紧为“按 Blender 数据块指针识别失败期间所有新增 Action，不论 users 数量”。这样即使异常残留 Action 仍被某处引用，也不会被原测试漏掉。提交：`0b33c70df8b7b21c9ad3aa501a39b09b847f2b91`。该项为测试断言加固，尚未运行 Blender runtime。
+
+## 2026-10-15 新增：动作 JSON 原子导出
+
+导出操作现在先将 JSON 写入目标文件同目录的唯一临时文件，完成序列化、flush/fsync 后再用 `os.replace` 替换目标文件；序列化/写盘失败时清理临时文件，避免破坏用户已有的有效导出。Smoke test 新增故障注入，检查旧文件内容不变且没有残留临时文件。实现提交 `1d204c795992133750eeafa30a4d731c241912e9`；测试提交 `b9ecdc75d18d5a31697be5efcc70df1deca6e73e`，测试夹具修正提交 `ddba9c7737a1a48769b9cb404eb5fa31971bbe28`。当前仍待 Blender runtime 执行。
