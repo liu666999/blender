@@ -159,3 +159,5 @@
 - [ ] **孤儿 Action 清理断言：** 已加入故障注入测试，确认导入中途失败后不存在新增的零用户 Action；待 Blender runtime 实际执行。
 
 - [ ] **动作 JSON 导出回归验证：** 已修复误改的导出 `finally`，恢复为仅还原原帧并更新视图层；必须在当前 HEAD 执行动作 JSON round-trip smoke test，确保导出可用且导入回滚测试通过。
+
+- [ ] **严格 Action 泄漏检查：** smoke test 已从名称/零用户过滤改为按数据块指针比较，任何中途失败后新建的 Action 残留都会导致失败（提交 `0b33c70df8b7b21c9ad3aa501a39b09b847f2b91`）；尚未执行 Blender runtime。
