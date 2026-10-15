@@ -943,6 +943,53 @@ def run():
         ensure({mesh.as_pointer() for mesh in bpy.data.meshes} == meshes_before_failed_import,
                "Failed asset import left an orphan mesh datablock.")
 
+        # A failure after category setup must also remove transaction-created
+        # collections, not only the imported object and its mesh datablock.
+        category_rollback_source = os.path.join(tmp, "category_rollback_asset.fbx")
+        with open(category_rollback_source, "wb") as stream:
+            stream.write(b"category rollback fixture")
+        collections_before_category_failure = {
+            collection.as_pointer() for collection in bpy.data.collections
+        }
+        objects_before_category_failure = {
+            obj.as_pointer() for obj in bpy.data.objects
+        }
+        original_import_call = rh_operators._call_import_operator
+        original_move_category = rh_operators.move_objects_to_category
+        def create_asset_for_category_failure(filepath):
+            mesh_data = bpy.data.meshes.new("RH_category_failure_mesh")
+            imported_object = bpy.data.objects.new("RH_category_failure_object", mesh_data)
+            bpy.context.scene.collection.objects.link(imported_object)
+            return {"FINISHED"}
+        def create_category_then_fail(objects, scene, category, source_path=""):
+            root = bpy.data.collections.get(rh_operators.ROOT_COLLECTION)
+            temporary_collection = bpy.data.collections.new(
+                "RH_fault_category_" + uuid.uuid4().hex)
+            if root is not None:
+                root.children.link(temporary_collection)
+            else:
+                scene.collection.children.link(temporary_collection)
+            raise RuntimeError("injected category assignment failure")
+        rh_operators._call_import_operator = create_asset_for_category_failure
+        rh_operators.move_objects_to_category = create_category_then_fail
+        try:
+            try:
+                category_failure_result = bpy.ops.rh_studio.import_asset(
+                    filepath=category_rollback_source, category="CLOTHING")
+            except RuntimeError:
+                category_failure_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+            rh_operators.move_objects_to_category = original_move_category
+        ensure("CANCELLED" in category_failure_result,
+               "Category assignment fault injection should cancel the import.")
+        ensure({obj.as_pointer() for obj in bpy.data.objects}
+               == objects_before_category_failure,
+               "Category assignment failure left an imported object behind.")
+        ensure({collection.as_pointer() for collection in bpy.data.collections}
+               == collections_before_category_failure,
+               "Category assignment failure left a transaction-created collection behind.")
+
         # A successful asset import should append a traceable batch without
         # discarding the project's existing manifest fields.
         project_dir = os.path.join(tmp, "SmokeTest")
