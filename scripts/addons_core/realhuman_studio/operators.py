@@ -1811,12 +1811,15 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
     def execute(self, context):
         obj = context.active_object
         # This first-stage proportion tool assumes an upright, single full-body
-        # mesh in local Z-up coordinates. It creates non-destructive shape keys.
-        if obj.data.shape_keys is None:
-            basis = obj.shape_key_add(name="Basis", from_mix=False)
+        # mesh in local Z-up coordinates. Validate geometry before adding Basis:
+        # a rejected mesh must not be modified as a side effect.
+        shape_keys = obj.data.shape_keys
+        basis = shape_keys.key_blocks[0] if shape_keys else None
+        if basis is None:
+            base_coords = [vertex.co.copy() for vertex in obj.data.vertices]
         else:
-            basis = obj.data.shape_keys.key_blocks[0]
-        base_coords = [basis.data[i].co.copy() for i in range(len(obj.data.vertices))]
+            base_coords = [basis.data[i].co.copy()
+                           for i in range(len(obj.data.vertices))]
         if not base_coords:
             self.report({"ERROR"}, "当前网格没有顶点。")
             return {"CANCELLED"}
@@ -1831,6 +1834,12 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
         if height < 1e-6 or max_x - min_x < 1e-6:
             self.report({"ERROR"}, "网格尺寸异常，无法生成体型控制。")
             return {"CANCELLED"}
+
+        # Only create Basis after all geometry preconditions have passed.
+        if basis is None:
+            basis = obj.shape_key_add(name="Basis", from_mix=False)
+            base_coords = [basis.data[i].co.copy()
+                           for i in range(len(obj.data.vertices))]
 
         center_x = (min_x + max_x) * 0.5
         center_y = (min_y + max_y) * 0.5
