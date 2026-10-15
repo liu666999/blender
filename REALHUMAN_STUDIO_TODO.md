@@ -83,7 +83,7 @@
 
 ## 本轮仍待完成（2026-10-15，已核对状态）
 
-- [ ] **当前 HEAD 的 CI 结果：** 分支 HEAD `659592ae6b22adb50e4031191ae1037cfae66d2e` 尚无可确认的对应 Actions 运行。旧 run [38544308219](https://github.com/liu666999/blender/actions/runs/38544308219) 的 Python 语法 job 通过，但 runtime 在旧版 smoke test 的系统剪贴板断言处失败；这不是当前 HEAD 的结果。需要让当前代码触发一次完整 workflow，并修复任何新发现的问题。
+- [ ] **当前 HEAD 的 CI 结果：** 代码提交快照 `659592ae6b22adb50e4031191ae1037cfae66d2e`（后续只有文档更新）尚无可确认的对应 Actions 运行。旧 run [38544308219](https://github.com/liu666999/blender/actions/runs/38544308219) 的 Python 语法 job 通过，但 runtime 在旧版 smoke test 的系统剪贴板断言处失败；这不是当前 HEAD 的结果。需要让当前代码触发一次完整 workflow，并修复任何新发现的问题。
 - [ ] 确认动作集保存/重开测试在目标 Blender 构建中实际通过；已静态核对 operator 属性 `action_set_name` 与测试调用一致，但尚未执行验证。
 - [ ] 下载并加载 Blender Studio CC0 Human Base Meshes，在真实人体上运行 `tests/realhuman_studio_real_mesh_validation.py`，检查四种形态键的正负方向、轮廓、体积与服装穿插。
 - [ ] 在 Blender GUI 中手测简笔摆姿的 GPU 绘制、拖动手脚端点、K 关键帧、R 复位、Esc 退出，并检查侧栏、骨架和材质节点。
