@@ -152,3 +152,11 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 回归测试：smoke test 新增载入后槽位绑定断言；`tests/realhuman_studio_action_persistence.py` 不再在重开文件后主动重绑槽位，而是直接断言保存的槽位绑定仍存在，避免测试自行修复待测状态。
 - 本次代码提交：`717ed77e73aa60082ef715fd88c3a80ea941e390`（operator）、`23864c789bc1c755371c4f48435c700f1176d71d`（smoke test）、`7cb5587d1c963a074418765d347e4b891b475d8d`（.blend 往返测试）。
 - **验证状态：仅完成源码与测试更新，尚未运行当前分支的 Blender runtime/CI；不得标记为通过。** 下一步继续核对 Actions 运行并根据真实日志修复，之后再按顺序进行真实人体网格验证和 GUI 验收。
+
+## 2026-10-15 补充：保留动作集原始槽位身份（待运行验证）
+
+- 进一步审查发现，动作集可能包含多个 Action Slot；仅绑定首个槽位不够稳妥，可能载入错误通道。
+- 保存动作集时现在记录源骨架当前槽位的 identifier 到动作集自定义属性 `rh_studio_action_slot_identifier`；载入时优先按 identifier 选择槽位，旧动作集缺少该属性时再选择适用于 Object 动画的槽位，最后才回退到首槽位。
+- smoke test 与 .blend 保存/重开测试已改为按保存的槽位身份检查，不再固定假设首槽位一定正确。
+- 本轮提交：`9b389edee2d94cdc181ad24626af4574d71ae89b`（保存/载入槽位身份）、`67e9048017d0796779980acfa8cc17b6d1954770`（smoke test）、`d625d591c6f872e447c225fe0800cde88c8ffadf`（重开验证）。
+- **状态：代码已提交，尚未在目标 Blender runtime 中执行；CI 结果仍待取得。** 本次修改没有被标记为测试通过。
