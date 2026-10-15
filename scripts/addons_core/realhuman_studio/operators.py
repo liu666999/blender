@@ -3037,6 +3037,23 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
         scene = context.scene
         original_frame = scene.frame_current
         old_action = rig.animation_data.action if rig.animation_data else None
+        old_action_slot = (
+            getattr(rig.animation_data, "action_slot", None)
+            if rig.animation_data else None
+        )
+        # Keep a full pose snapshot so an exception during key insertion cannot
+        # leave the rig visually half-imported when no old Action is assigned.
+        pose_snapshot = {
+            bone.name: {
+                "location": tuple(bone.location),
+                "rotation_mode": bone.rotation_mode,
+                "rotation_quaternion": tuple(bone.rotation_quaternion),
+                "rotation_euler": tuple(bone.rotation_euler),
+                "rotation_axis_angle": tuple(bone.rotation_axis_angle),
+                "scale": tuple(bone.scale),
+            }
+            for bone in rig.pose.bones
+        }
         new_action = None
         try:
             rig.animation_data_create()
@@ -3061,11 +3078,28 @@ class RH_OT_import_action_json(bpy.types.Operator, ImportHelper):
         except Exception as exc:
             partial_action = rig.animation_data.action if rig.animation_data else None
             rig.animation_data.action = old_action
+            if old_action is not None and old_action_slot is not None:
+                try:
+                    if old_action.slots.get(old_action_slot.identifier) is not None:
+                        rig.animation_data.action_slot = old_action_slot
+                except (AttributeError, ReferenceError, RuntimeError):
+                    # Older Blender versions do not expose Action Slots.
+                    pass
+            for bone_name, values in pose_snapshot.items():
+                bone = rig.pose.bones.get(bone_name)
+                if bone is None:
+                    continue
+                bone.location = values["location"]
+                bone.rotation_mode = values["rotation_mode"]
+                bone.rotation_quaternion = values["rotation_quaternion"]
+                bone.rotation_euler = values["rotation_euler"]
+                bone.rotation_axis_angle = values["rotation_axis_angle"]
+                bone.scale = values["scale"]
             orphan_action = new_action or partial_action
             if (orphan_action is not None and orphan_action != old_action
                     and orphan_action.users == 0):
                 bpy.data.actions.remove(orphan_action)
-            self.report({"ERROR"}, "写入动作失败，已恢复原动作：" + str(exc))
+            self.report({"ERROR"}, "写入动作失败，已恢复原动作与骨骼姿态：" + str(exc))
             return {"CANCELLED"}
         finally:
             scene.frame_set(original_frame)
