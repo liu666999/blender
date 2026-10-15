@@ -157,3 +157,5 @@
 - [ ] **确认姿态快照重放已落在实际 `finally` 分支：** 最新提交 `672b374ce6530d83213b402c3e0a282d57a78f16` 已补齐，但必须由当前 HEAD 的 Blender runtime 故障注入测试验证，不能只凭静态代码标记通过。
 
 - [ ] **孤儿 Action 清理断言：** 已加入故障注入测试，确认导入中途失败后不存在新增的零用户 Action；待 Blender runtime 实际执行。
+
+- [ ] **动作 JSON 导出回归验证：** 已修复误改的导出 `finally`，恢复为仅还原原帧并更新视图层；必须在当前 HEAD 执行动作 JSON round-trip smoke test，确保导出可用且导入回滚测试通过。
