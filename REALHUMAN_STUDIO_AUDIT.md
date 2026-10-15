@@ -1,6 +1,6 @@
 # RealHuman Studio — Implementation Audit
 
-**Audit date:** 2026-10-14  
+**Audit date:** 2026-10-15  
 **Source branch:** `feature/realhuman-studio-phase1`  
 **Scope:** Source-level review of `scripts/addons_core/realhuman_studio/`, the smoke-test script, and the workflow. This is not a claim that a full Blender GUI session or a Windows build has been tested.
 
