@@ -2747,6 +2747,22 @@ class RH_OT_save_action_set(bpy.types.Operator):
         if source is None:
             self.report({"ERROR"}, "当前骨架没有动画关键帧。先摆姿并按 K 或“记录当前姿势关键帧”。")
             return {"CANCELLED"}
+
+        # Refuse to save a layered Action without an active slot: otherwise
+        # loading the saved set would have to guess which animation channels
+        # the source rig intended to use. Validate before replacing any
+        # existing named set, so a rejected save cannot destroy prior data.
+        source_slots = getattr(source, "slots", None)
+        source_slot = getattr(rig.animation_data, "action_slot", None)
+        if source_slots is not None and len(source_slots):
+            if source_slot is None or not any(
+                    slot.identifier == source_slot.identifier for slot in source_slots):
+                self.report(
+                    {"ERROR"},
+                    "当前动作有 Action Slot，但骨架未绑定有效槽位；请先在动作属性中选择槽位后再保存。",
+                )
+                return {"CANCELLED"}
+
         label = self.action_set_name.strip()
         if not label:
             self.report({"ERROR"}, "动作集名称不能为空。")
@@ -2780,7 +2796,6 @@ class RH_OT_save_action_set(bpy.types.Operator):
         # Preserve which Action Slot the source rig was using. Actions can
         # contain multiple slots of the same ID type, so blindly choosing the
         # first slot when loading can silently select the wrong animation data.
-        source_slot = getattr(rig.animation_data, "action_slot", None)
         if source_slot is not None:
             saved["rh_studio_action_slot_identifier"] = source_slot.identifier
         if target_name != full_name:
