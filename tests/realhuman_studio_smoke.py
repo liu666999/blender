@@ -278,6 +278,15 @@ def run():
            and abs(loaded_scale.y - 1.1) < 1e-3
            and abs(loaded_scale.z - 0.9) < 1e-3,
            "Loaded action-set scale channels did not evaluate at their keyed frame.")
+    # The pose-pad drawing center must keep its head and footer inside the
+    # smallest viewport accepted by invoke(); GPU rendering itself needs GUI QA.
+    small_cx, small_cy = rh_operators._simple_pose_pad_center(240, 220)
+    ensure(120.0 <= small_cx <= 120.0 and 124.0 <= small_cy <= 120.0 + 4.0,
+           "Minimal pose-pad layout is outside the accepted small viewport.")
+    ensure(small_cy + 84.0 + 15.0 <= 220.0
+           and small_cy - 124.0 >= 0.0,
+           "Pose-pad head/footer would be clipped in a 240x220 viewport.")
+
     # The minimal 2D pose pad must key scale as well as location/rotation.
     # Use the shared helper directly because a headless test cannot validate the modal GPU overlay.
     bpy.context.scene.frame_set(17)
