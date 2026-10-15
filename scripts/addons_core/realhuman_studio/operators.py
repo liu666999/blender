@@ -291,7 +291,16 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             except (RuntimeError, StopIteration):
                 pass
         except Exception as exc:
-            self.report({"ERROR"}, "导入失败：" + str(exc))
+            # Importers may create several datablocks before raising. Remove every
+            # object created during this transaction so a failed import does not
+            # leave a half-imported scene behind.
+            for obj in list(bpy.data.objects):
+                if obj.as_pointer() not in before:
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
+                    except (ReferenceError, RuntimeError):
+                        pass
+            self.report({"ERROR"}, "导入失败，已清理本次新增对象：" + str(exc))
             return {"CANCELLED"}
         self.report({"INFO"}, "已导入 %d 个对象到「%s」。批次：%s" %
                     (len(imported), CATEGORY_COLLECTIONS[self.category], batch_id[:8]))
