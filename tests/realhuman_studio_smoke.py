@@ -873,6 +873,30 @@ def run():
         euler_bone.rotation_euler = (0.2, 0.4, 0.6)
         euler_bone.keyframe_insert(
             data_path="rotation_euler", frame=bpy.context.scene.frame_current)
+        # An interrupted JSON serialization must not truncate a previous export.
+        preserved_export_path = os.path.join(tmp, "preserved_export.json")
+        preserved_export_contents = "{\\\"keep\\\": \\\"old export\\\"}\\n"
+        with open(preserved_export_path, "w", encoding="utf-8") as stream:
+            stream.write(preserved_export_contents)
+        original_json_dump = rh_operators.json.dump
+        def fail_json_serialization(*args, **kwargs):
+            raise OSError("injected JSON serialization failure")
+        rh_operators.json.dump = fail_json_serialization
+        try:
+            try:
+                result = bpy.ops.rh_studio.export_action_json(filepath=preserved_export_path)
+            except RuntimeError:
+                result = {"CANCELLED"}
+        finally:
+            rh_operators.json.dump = original_json_dump
+        ensure("CANCELLED" in result,
+               "Injected export serialization failure should cancel the export.")
+        with open(preserved_export_path, "r", encoding="utf-8") as stream:
+            ensure(stream.read() == preserved_export_contents,
+                   "Failed export truncated an existing JSON file.")
+        ensure(not any(name.startswith("preserved_export.json.tmp-") for name in os.listdir(tmp)),
+               "Failed export left a temporary JSON file behind.")
+
         json_path = os.path.join(tmp, "ci_motion.json")
         ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=json_path),
                "Action JSON export failed.")
