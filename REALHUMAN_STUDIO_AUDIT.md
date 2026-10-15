@@ -173,3 +173,7 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 ## 2026-10-15 复核发现
 
 此前记录了“恢复原帧后重放姿态”，但最新读取的源码显示 finally 分支当时未实际包含重放逻辑。已在提交 `672b374ce6530d83213b402c3e0a282d57a78f16` 中补齐。此项是实际实现修正，待当前提交触发的 Blender runtime 测试验证。
+
+## 2026-10-15 故障注入检查范围扩展
+
+新增断言检查动作 JSON 中途写入失败后没有遗留新增的零用户 Action。提交：3fb885d7d319076ccef6c4eb2c92c1daa77bdf4f。该检查尚未由 Blender runtime 执行。
