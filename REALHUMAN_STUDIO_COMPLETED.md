@@ -192,3 +192,8 @@
 - 动作集保存新增暂存阶段：复制 Action、设置 fake user、保留 Action Slot 标识均成功后，才替换无真实使用者的同名旧条目。
 - 新增 `_copy_action_set_action` 故障注入 seam 和回归用例，覆盖复制失败时保留旧动作集及暂存/备份清理。
 - 源码提交 `868f4265c96f8e26c0a0aef3f23ffb8dfcefb26d`，测试提交 `e0779a5d588f8f399221e322ed546783fa82f40f`；尚未在 Blender runtime 中执行。
+
+## 2026-10-15 动作 JSON 校验覆盖扩展
+
+- smoke test 新增零长度四元数与重复帧号测试，验证无效动作文件在创建/替换 Action 前被拒绝。
+- 断言拒绝导入后骨架仍使用原 Action。测试提交 `95be5d54bb59cfc80b7c32e8b57903cfb48c4704`；尚未运行 Blender runtime。
