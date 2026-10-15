@@ -222,3 +222,12 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 
 - 新增零长度四元数与重复/非递增帧号回归用例，确保这类无效输入在动作写入前被拒绝，并且不会替换现有 Action。
 - 测试提交 `95be5d54bb59cfc80b7c32e8b57903cfb48c4704`。当前只确认测试源码已写入分支，Blender runtime 尚未执行。
+
+
+## 2026-10-15 审计补充：体型控制异常坐标污染
+
+- **风险：** NaN/Infinity 顶点坐标可能使边界计算、衰减权重和生成的形态键坐标失效，且可能将坏数据扩散到整套控制。
+- **修复：** 在任何 Basis 创建或既有键更新前检查基础坐标的 X/Y/Z 均为有限数；不符合时取消且不主动改动形态键。
+- **回归：** smoke test 注入 NaN 顶点，断言操作取消且未创建 Basis。
+- **提交：** 源码 `5edeafb4aad1c119e40332de7ff2fae39ff0f8d1`；测试 `107c119028f5f9ac9f76e6c2a5f6c77b2223c436`。
+- **验证状态：** 代码审查与测试编写已完成，当前分支尚无对应 Blender runtime/CI 结果。
