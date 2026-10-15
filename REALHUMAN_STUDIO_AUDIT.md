@@ -145,3 +145,5 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **修复策略：** 对现有清单做 JSON 结构与应用标识验证；有效清单不重写，错误清单拒绝操作；首次生成采用临时文件 + 原子替换。
 - **测试策略：** 新增有效清单字段/导入历史保留断言，以及损坏 JSON 被拒绝且内容不变断言。
 - **状态：** 源码与测试已提交，未取得最新 Blender runtime CI 结果；仍待自动化执行与实际 GUI 验收。
+
+- 测试隔离注意：保留元数据的用例会在断言后重置 asset_sources 为空，避免影响后续导入历史追加测试；提交 5d2b0dba115826f6dc8fcb74869f0e29aa8fa9bc，尚未运行验证。
