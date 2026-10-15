@@ -139,3 +139,5 @@
 - 动作 JSON 写入阶段异常时，现在恢复原 Action、尽力恢复原 Action Slot，并恢复骨架各骨骼的 location、rotation_mode、quaternion、Euler、axis-angle 与 scale，防止导入中断后姿态半更新。
 - 新增非法动作 JSON 不应改变当前姿态的 smoke 断言。
 - 提交：66306891541d0ddaa33dc8f3fdff8577e5dae7f1、1d110d0456dc2374d5dc8037bcfb60b742f04784；等待 Blender runtime 执行。
+
+- 代码审查补充：恢复 Action Slot 时改为遍历现有 slots 并按稳定 identifier 比对，避免依赖集合的名称查找行为。提交：41984809e3cb1354fe7386345ec976fae1344d89；仍待 Blender runtime 验证。
