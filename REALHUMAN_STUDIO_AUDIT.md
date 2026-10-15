@@ -71,7 +71,7 @@
 
 ## Known risks and manual validation checklist
 
-1. Run the latest GitHub Actions workflow and confirm the Blender runtime smoke test reaches its explicit PASS marker, including import-history recording, per-item missing-source repair result reports, selected-asset and whole-project missing-source/rig-link diagnostics, Action-name preservation, and scale-keyframe checks.
+1. Run the latest GitHub Actions workflow (the workflow now has a manual `workflow_dispatch` trigger) and confirm the Blender runtime smoke test reaches its explicit PASS marker, including import-history recording, per-item missing-source repair result reports, selected-asset and whole-project missing-source/rig-link diagnostics, Action-name preservation, and scale-keyframe checks.
 2. In the actual GUI, register the add-on, generate the new shoulder/chest/waist/hip controls on an upright human mesh, and inspect for unwanted deformation; then check that the RealHuman sidebar draws without errors; enter Pose Mode, select a bone, adjust local XYZ rotation, and test optional keyframing.
 3. Generate a rig from a representative human mesh; inspect bone positions, parenting, roll, and any automatic-weight deformation.
 4. Test the 2D pose overlay from the sidebar in front, side, and perspective views; drag every endpoint, navigate with middle mouse/wheel, record multiple frames, and play the result back.
