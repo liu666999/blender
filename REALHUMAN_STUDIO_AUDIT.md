@@ -138,3 +138,10 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 
 - 另新增 smoke regression：对支持 Action Slot 的版本，暂时解除源骨架的活动槽位后尝试保存同名动作集，要求操作被取消且旧动作集数据块仍保持原样；随后恢复原槽位。提交：`f3ff07b2f69a6bac028a71d99cb8e8cb91d340c3`。
 - 此新增用例仍需 Blender runtime 实际执行；若目标 Blender 不允许把 `action_slot` 设为 `None`，将依据运行日志调整测试构造方式。
+
+## 2026-10-15 审计补充：项目清单覆盖风险修复（待验证）
+
+- **发现风险：** 项目目录已存在时，旧逻辑会直接用空 asset_sources 重写 realhuman_project.json，存在清空导入历史的风险。
+- **修复策略：** 对现有清单做 JSON 结构与应用标识验证；有效清单不重写，错误清单拒绝操作；首次生成采用临时文件 + 原子替换。
+- **测试策略：** 新增有效清单字段/导入历史保留断言，以及损坏 JSON 被拒绝且内容不变断言。
+- **状态：** 源码与测试已提交，未取得最新 Blender runtime CI 结果；仍待自动化执行与实际 GUI 验收。
