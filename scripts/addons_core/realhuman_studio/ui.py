@@ -74,7 +74,9 @@ class RH_PT_main(bpy.types.Panel):
         body.label(text="组校准会缩放所有选中对象；请先选齐身体网格、骨架和需同步的衣物。")
         body.operator("rh_studio.generate_body_proportion_keys", icon="MOD_MESHDEFORM",
                       text="生成 / 更新肩胸腰臀控制")
-        body.label(text="适用于单个人体网格（Z 轴向上）；先创建控制，再调节下方形态键。")
+        body.operator("rh_studio.create_body_proportion_masks", icon="MOD_VERTEX_WEIGHT",
+                      text="创建缺失的肩胸腰臀初始遮罩")
+        body.label(text="适用于单个人体网格（局部 Z 轴向上）。初始遮罩按高度粗分区；已有同名权重组不会覆盖，请用权重绘制精修。")
         if context.active_object and context.active_object.type == "MESH":
             keys = _active_shape_keys(context)
             if keys and len(keys) > 1:
