@@ -2098,6 +2098,91 @@ class RH_OT_create_body_proportion_masks(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_apply_body_silhouette_preset(bpy.types.Operator):
+    bl_idname = "rh_studio.apply_body_silhouette_preset"
+    bl_label = "应用体型轮廓模板"
+    bl_description = (
+        "Set starting values for existing shoulder/chest/waist/hip shape keys; "
+        "this does not generate a complete sex-specific body model"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset: EnumProperty(
+        name="轮廓模板",
+        items=(
+            ("MALE", "男性基础轮廓", "较宽肩胸，较直腰臀的起始值"),
+            ("FEMALE", "女性基础轮廓", "相对收肩收腰、加宽臀部的起始值"),
+            ("ATHLETIC", "运动型", "较宽肩胸与较收腰部的起始值"),
+            ("SLIM", "纤瘦型", "相对收窄肩胸腰臀的起始值"),
+            ("HEAVY", "厚实体型", "相对加宽胸腰臀的起始值"),
+        ),
+        default="MALE",
+    )
+
+    _PRESET_VALUES = {
+        "MALE": {
+            "RH体型 | 肩宽": 0.45, "RH体型 | 胸围": 0.35,
+            "RH体型 | 腰围": 0.10, "RH体型 | 臀宽": 0.10,
+        },
+        "FEMALE": {
+            "RH体型 | 肩宽": -0.15, "RH体型 | 胸围": 0.25,
+            "RH体型 | 腰围": -0.45, "RH体型 | 臀宽": 0.55,
+        },
+        "ATHLETIC": {
+            "RH体型 | 肩宽": 0.80, "RH体型 | 胸围": 0.75,
+            "RH体型 | 腰围": -0.25, "RH体型 | 臀宽": 0.10,
+        },
+        "SLIM": {
+            "RH体型 | 肩宽": -0.25, "RH体型 | 胸围": -0.35,
+            "RH体型 | 腰围": -0.15, "RH体型 | 臀宽": -0.15,
+        },
+        "HEAVY": {
+            "RH体型 | 肩宽": 0.10, "RH体型 | 胸围": 0.20,
+            "RH体型 | 腰围": 0.65, "RH体型 | 臀宽": 0.40,
+        },
+    }
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        if not obj or obj.type != "MESH" or not obj.data.shape_keys:
+            return False
+        keys = obj.data.shape_keys.key_blocks
+        return any(keys.get(name) is not None
+                   for name in cls._PRESET_VALUES["MALE"])
+
+    def execute(self, context):
+        obj = context.active_object
+        keys = obj.data.shape_keys.key_blocks
+        values = self._PRESET_VALUES[self.preset]
+        applied = []
+        missing = []
+        for key_name, requested in values.items():
+            key = keys.get(key_name)
+            if key is None:
+                missing.append(key_name)
+                continue
+            # Respect artist-customized slider limits instead of forcing a
+            # value the current model cannot represent.
+            actual = max(float(key.slider_min), min(float(key.slider_max), requested))
+            key.value = actual
+            applied.append(key_name)
+
+        if not applied:
+            self.report({"ERROR"}, "当前模型没有可识别的肩胸腰臀形态键；未修改模型。")
+            return {"CANCELLED"}
+
+        labels = {"MALE": "男性基础轮廓", "FEMALE": "女性基础轮廓",
+                  "ATHLETIC": "运动型", "SLIM": "纤瘦型", "HEAVY": "厚实体型"}
+        message = "%s：已设置 %d 个现有轮廓滑块。" % (labels[self.preset], len(applied))
+        if missing:
+            message += " 跳过 %d 个不存在的控制。" % len(missing)
+        message += " 这是可继续手调的粗轮廓起点，不会生成性别专属解剖、肌肉/脂肪、面部或毛发资产。"
+        self.report({"WARNING"} if missing else {"INFO"}, message)
+        context.view_layer.update()
+        return {"FINISHED"}
+
+
 class RH_OT_reset_shape_keys(bpy.types.Operator):
     bl_idname = "rh_studio.reset_shape_keys"
     bl_label = "重置形态键"
@@ -3871,7 +3956,7 @@ CLASSES = (
     RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
     RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
