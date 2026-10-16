@@ -411,4 +411,13 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 
 ### 验证状态
 
-最新代码/测试提交没有可确认的 Blender runtime/CI 结果；GitHub 检查接口当前返回空状态。静态代码审阅和测试用例编写不等于测试运行通过。接下来应由真实 Blender runtime 执行完整 smoke suite，随后在真实人体、解剖结构与服装模型上做 GUI/视觉验收。
+最新代码/测试提交没有可确认的 Blender runtime/CI 结果；GitHub 检查接口当前返回空状态。静态代码审阅和测试用例编写不等于测试运行通过。接下来应由真实 Blender runtime 执行完整 smoke suite，随后在真实人体、解剖结构与服装模型上做 GUI/视觉验收。## 2026-10-16 原生雕刻快捷入口状态
+
+
+## 2026-10-16：原生泥塑雕刻工作流快捷入口
+
+- 新增原生 Sculpt Mode 快捷操作，提供 Clay Strips（泥塑堆积）、Draw（推拉）、Grab（抓取）、Smooth（平滑）、Crease（刻线）、Scrape（刮削）、Inflate（鼓起）工具切换，及场景级笔刷半径/强度设置。
+- 该实现直接调用 Blender 的原生网格雕刻工具，不是自制物理泥塑模拟器；动态拓扑/多分辨率策略、雕刻图层与高级笔刷自定义仍属于后续工作。
+- 新增 smoke 覆盖：场景属性注册/注销及活动网格可切换至 Sculpt Mode。没有 VIEW_3D 上下文时会保持 Sculpt Mode 可用，并提示用户从工具栏选择笔刷。
+- 提交：场景属性 `05a2e6cd2db9e9e718c8d4911a9d1c0536e03c66`；雕刻操作符 `95d1fa223fb1c39893a95629befe989a9048033a`；UI `85caa8a3d72393f98c11ba36ee9a22fe6e0bd8f8`；测试 `3748e17b493387cb2d605866cca60360d9caf844`；注销清理修正 `ab928b952e5d65cd30aec5b29662de87bee23d0b`。
+- **验证状态：** 尚未取得 Blender runtime/CI 结果；工具栏切换、各笔刷是否能在目标工作区载入、笔刷响应与实际雕刻效果仍需 GUI 验收。
