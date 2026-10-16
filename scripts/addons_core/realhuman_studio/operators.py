@@ -55,6 +55,71 @@ def ensure_category_scaffold(scene):
     for category, _label, _description in CATEGORY_ITEMS:
         category_collection(scene, category, create=True)
 
+
+CHARACTER_CATEGORY_KEYS = tuple(key for key in CATEGORY_COLLECTIONS if key != "OTHER")
+
+
+def _iter_collection_objects_recursive(collection):
+    """Yield unique objects from a collection subtree without traversing it twice."""
+    pending = [collection]
+    seen_collections = set()
+    seen_objects = set()
+    while pending:
+        current = pending.pop()
+        pointer = current.as_pointer()
+        if pointer in seen_collections:
+            continue
+        seen_collections.add(pointer)
+        pending.extend(list(current.children))
+        for obj in current.objects:
+            obj_pointer = obj.as_pointer()
+            if obj_pointer not in seen_objects:
+                seen_objects.add(obj_pointer)
+                yield obj
+
+
+def _character_layer_objects(scene):
+    """Return all objects in the classified anatomy/rig/clothing layers."""
+    objects = {}
+    for category in CHARACTER_CATEGORY_KEYS:
+        collection = category_collection(scene, category)
+        if collection is None:
+            continue
+        for obj in _iter_collection_objects_recursive(collection):
+            if obj.get("rh_studio_character_root"):
+                continue
+            objects[obj.as_pointer()] = obj
+    return list(objects.values())
+
+
+def _is_object_descendant_of(obj, ancestor):
+    parent = obj.parent
+    while parent is not None:
+        if parent == ancestor:
+            return True
+        parent = parent.parent
+    return False
+
+
+def _character_root_meshes(scene, root):
+    """Return categorized meshes parented below the shared character root."""
+    return [
+        obj for obj in scene.objects
+        if obj.type == "MESH" and obj != root and _is_object_descendant_of(obj, root)
+    ]
+
+
+def _world_mesh_corners(objects):
+    corners = []
+    for obj in objects:
+        if obj.type != "MESH":
+            continue
+        try:
+            corners.extend(obj.matrix_world @ Vector(corner) for corner in obj.bound_box)
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return corners
+
 def move_objects_to_category(objects, scene, category, source_path=""):
     target = category_collection(scene, category, create=True)
     for obj in objects:
@@ -1921,6 +1986,169 @@ class RH_OT_fit_selected_group_height(bpy.types.Operator):
             {"INFO"},
             "已校准所选 %d 个对象组成的资源组：高度 %.3f 米，底部 Z=%.4f 米。请确认骨架、身体网格和衣物均已选中。" %
             (len(objects), final_height_m, final_bottom_m)
+        )
+        return {"FINISHED"}
+
+
+class RH_OT_create_character_root(bpy.types.Operator):
+    bl_idname = "rh_studio.create_character_root"
+    bl_label = "建立 / 更新统一角色控制"
+    bl_description = (
+        "Parent classified anatomy, rig and clothing roots to one control while "
+        "preserving their world transforms"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(_character_layer_objects(context.scene))
+
+    def execute(self, context):
+        scene = context.scene
+        ensure_category_scaffold(scene)
+        collection = bpy.data.collections.get(ROOT_COLLECTION)
+        objects = _character_layer_objects(scene)
+        if not objects:
+            self.report({"ERROR"}, "当前分类图层中没有人体/解剖/服装对象。")
+            return {"CANCELLED"}
+
+        roots = [obj for obj in scene.objects if obj.get("rh_studio_character_root")]
+        if len(roots) > 1:
+            active = context.active_object
+            if active in roots:
+                roots = [active]
+            else:
+                self.report({"ERROR"}, "场景中存在多个角色统一控制器；请先选中要更新的控制器。")
+                return {"CANCELLED"}
+
+        created = False
+        if roots:
+            control = roots[0]
+        else:
+            corners = _world_mesh_corners(objects)
+            if not corners:
+                self.report({"ERROR"}, "分类图层中没有可测量边界的人体网格，无法安全创建统一控制。")
+                return {"CANCELLED"}
+            minimum = Vector((min(p.x for p in corners), min(p.y for p in corners), min(p.z for p in corners)))
+            maximum = Vector((max(p.x for p in corners), max(p.y for p in corners), max(p.z for p in corners)))
+            # Place the pivot at the group bottom-center: a later uniform scale
+            # naturally scales around the feet instead of dragging them off ground.
+            pivot = Vector(((minimum.x + maximum.x) * 0.5,
+                            (minimum.y + maximum.y) * 0.5, minimum.z))
+            control = bpy.data.objects.new("RH 统一角色控制", None)
+            control.empty_display_type = "PLAIN_AXES"
+            control.empty_display_size = 0.25
+            control.location = pivot
+            control["rh_studio_character_root"] = True
+            collection.objects.link(control)
+            created = True
+            context.view_layer.update()
+
+        if control.name not in collection.objects:
+            collection.objects.link(control)
+
+        attached = 0
+        skipped = 0
+        for obj in objects:
+            if obj == control or obj.parent == control or _is_object_descendant_of(obj, control):
+                continue
+            # Preserve existing rig/object parenting. Its highest unparented
+            # categorized ancestor will become a child of the unified control.
+            if obj.parent is not None:
+                skipped += 1
+                continue
+            world_matrix = obj.matrix_world.copy()
+            obj.parent = control
+            obj.matrix_parent_inverse = control.matrix_world.inverted_safe()
+            obj.matrix_world = world_matrix
+            attached += 1
+
+        context.view_layer.update()
+        children = [obj for obj in scene.objects if _is_object_descendant_of(obj, control)]
+        if not children:
+            if created:
+                bpy.data.objects.remove(control, do_unlink=True)
+            self.report({"ERROR"}, "没有对象能够安全挂接；现有父子关系已保留。")
+            return {"CANCELLED"}
+
+        for obj in list(context.selected_objects):
+            obj.select_set(False)
+        control.select_set(True)
+        context.view_layer.objects.active = control
+        message = "%s统一控制：新挂接 %d 个顶级对象。" % ("已建立" if created else "已更新", attached)
+        if skipped:
+            message += " 保留 %d 个已有父对象的层级，避免破坏骨架/附件关系。" % skipped
+        message += " 选中控制器可整体移动/旋转/缩放；各子对象仍可单独编辑。"
+        self.report({"INFO"}, message)
+        return {"FINISHED"}
+
+
+class RH_OT_fit_character_root_height(bpy.types.Operator):
+    bl_idname = "rh_studio.fit_character_root_height"
+    bl_label = "校准整个角色身高"
+    bl_description = "Uniformly scale the unified character controller to a target height and place its feet at Z=0"
+    bl_options = {"REGISTER", "UNDO"}
+
+    target_height: FloatProperty(name="目标身高（米）", default=1.75, min=0.1, max=3.0)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.get("rh_studio_character_root"))
+
+    def execute(self, context):
+        control = context.active_object
+        scene = context.scene
+        unit_settings = scene.unit_settings
+        meters_per_blender_unit = float(unit_settings.scale_length) if unit_settings else 1.0
+        if not math.isfinite(meters_per_blender_unit) or meters_per_blender_unit <= 0.0:
+            self.report({"ERROR"}, "场景单位比例无效，未修改角色。")
+            return {"CANCELLED"}
+        # Height fitting assumes the control keeps the character upright. Refuse
+        # tilted roots rather than silently guessing projected world height.
+        if abs(control.rotation_euler.x) > 1e-4 or abs(control.rotation_euler.y) > 1e-4:
+            self.report({"ERROR"}, "角色控制器绕 X/Y 轴倾斜；请先恢复直立再校准身高。")
+            return {"CANCELLED"}
+
+        meshes = _character_root_meshes(scene, control)
+        corners = _world_mesh_corners(meshes)
+        if not corners:
+            self.report({"ERROR"}, "统一控制器下没有可测量的人体网格。")
+            return {"CANCELLED"}
+
+        minimum_z = min(point.z for point in corners)
+        maximum_z = max(point.z for point in corners)
+        current_height = maximum_z - minimum_z
+        if not math.isfinite(current_height) or current_height <= 1e-8:
+            self.report({"ERROR"}, "角色高度为零或无效，未修改角色。")
+            return {"CANCELLED"}
+
+        target_height_bu = float(self.target_height) / meters_per_blender_unit
+        factor = target_height_bu / current_height
+        if not math.isfinite(factor) or factor <= 0.0:
+            self.report({"ERROR"}, "计算出的缩放比例无效，未修改角色。")
+            return {"CANCELLED"}
+
+        control.scale = tuple(value * factor for value in control.scale)
+        context.view_layer.update()
+        corners = _world_mesh_corners(_character_root_meshes(scene, control))
+        if not corners:
+            self.report({"ERROR"}, "校准后无法测量角色边界。")
+            return {"CANCELLED"}
+        bottom = min(point.z for point in corners)
+        world_matrix = control.matrix_world.copy()
+        world_matrix.translation.z -= bottom
+        control.matrix_world = world_matrix
+        context.view_layer.update()
+
+        final_corners = _world_mesh_corners(_character_root_meshes(scene, control))
+        final_height_m = (max(point.z for point in final_corners) -
+                          min(point.z for point in final_corners)) * meters_per_blender_unit
+        final_bottom_m = min(point.z for point in final_corners) * meters_per_blender_unit
+        self.report(
+            {"INFO"},
+            "整个角色组已校准至 %.3f 米，底部 Z=%.4f 米；统一控制下的皮肤/解剖/骨架/服装一起缩放。" %
+            (final_height_m, final_bottom_m)
         )
         return {"FINISHED"}
 
@@ -4006,7 +4234,7 @@ CLASSES = (
     RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
     RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
