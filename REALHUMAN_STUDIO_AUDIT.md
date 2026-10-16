@@ -323,3 +323,11 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **已知缺失：** 单一成年男性，不含皮肤、脂肪、内脏、血管、神经，且无绑定/姿势。它不能满足完整人体需求，只是可组合的解剖部件来源。
 - **许可边界：** 需随使用内容保留上游署名与 CC BY-SA 4.0 条件；不将模型资产错误地归为 CC0，也不在未经许可边界整理的情况下随 GPL 插件二进制打包。
 - **验证状态：** 仅完成来源与 README 级别研究，未导入本项目、未核验实际 Blender 变换，也未检查每个部件的视觉对齐/质量。正式集成前仍需许可和技术复核。
+
+
+## 2026-10-16 审计补充：浸染软边与织物微纹理节点
+
+- **实现：** `RH_OT_create_fabric_print` 新增 DYE 模式、`edge_bleed` 与 `weave_strength` 参数；节点图由 Smoothstep `ShaderNodeMapRange` 控制染色/印花的软边混合，另用高频 Noise + Bump 给 Principled BSDF 的法线增加微细纹理。材质元数据保留坐标、位置、缩放、浸染软边、织纹强度以及独立的 `procedural_fabric_dye` 类型。
+- **测试：** 新增烟雾断言验证节点存在、Map Range 接入颜色 Mix、Bump 接入 Principled Normal，并检查 DYE 参数元数据。源码 `bcf375a5a550d716a02a7719dc3cf913103de768`，元数据修正 `d2abb54163ecb85eedb42a95ad90ff64fea044d0`，UI `803ceb8d0a26b62fc0a03dea4a847000a41e1367`，测试 `f8d8f23831a11d10399b9e29ad3afcbe72bbf3eb` / `f6335cf02cbadbadd5247a9c578525f7dca9cdba`。
+- **审计限制：** 节点平滑混色只提供视觉上类似染料渗开的边界，并未模拟液体扩散、纱线吸收、织物厚度或真实微纤维。高频 Noise 的效果也必须在真实服装上调整，程序节点构建成功不等于渲染质量合格。
+- **验证状态：** 尚未取得当前提交对应 Blender runtime/CI 输出；相关回归测试不代表已通过。
