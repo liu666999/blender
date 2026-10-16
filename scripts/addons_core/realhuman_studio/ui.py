@@ -48,6 +48,18 @@ class RH_PT_main(bpy.types.Panel):
         assets.operator("rh_studio.diagnose_asset_scale", icon="DRIVER_DISTANCE", text="诊断尺寸 / 可能单位（不修改模型）")
         normalize = assets.operator("rh_studio.normalize_selected_assets", icon="ORIENTATION_GLOBAL", text="规范化位置（居中 / 落地）")
 
+        character = layout.box()
+        character.label(text="统一角色控制", icon="OUTLINER_OB_ARMATURE")
+        character.operator("rh_studio.create_character_root", icon="EMPTY_AXIS",
+                           text="建立 / 更新全身统一控制")
+        active = context.active_object
+        root_controls = character.column()
+        root_controls.enabled = bool(active and active.get("rh_studio_character_root"))
+        op = root_controls.operator("rh_studio.fit_character_root_height",
+                                    icon="FULLSCREEN_ENTER", text="统一校准整个角色身高")
+        op.target_height = scene.rh_studio_target_height
+        character.label(text="整体控制用于统调身高、位置和姿态；各层与零件仍可独立选择、编辑。先分好分类图层，再建立统一控制。")
+
         layers = layout.box()
         layers.label(text="解剖图层", icon="OUTLINER")
         for category, label, _description in CATEGORY_ITEMS:
