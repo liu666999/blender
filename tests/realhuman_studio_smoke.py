@@ -488,6 +488,16 @@ def run():
            and any(node.bl_idname == "ShaderNodeTexNoise" for node in dot_nodes)
            and any(node.bl_idname == "ShaderNodeBump" for node in dot_nodes),
            "Fabric print material must include soft dye edges and a micrograin bump.")
+    dot_links = list(dot_material.node_tree.links)
+    ensure(any(link.from_node.bl_idname == "ShaderNodeMapRange"
+               and link.to_node.bl_idname == "ShaderNodeMixRGB"
+               for link in dot_links),
+           "Soft dye-edge mask is present but not connected to the print color mix.")
+    ensure(any(link.from_node.bl_idname == "ShaderNodeBump"
+               and link.to_node.bl_idname == "ShaderNodeBsdfPrincipled"
+               and link.to_socket.name == "Normal"
+               for link in dot_links),
+           "Fabric micrograin bump is present but not connected to the shader normal.")
     ensure(abs(dot_material.get("rh_studio_edge_bleed", -1.0) - 0.06) < 1e-6
            and abs(dot_material.get("rh_studio_weave_strength", -1.0) - 0.25) < 1e-6,
            "Fabric dye-edge and weave controls were not persisted in material metadata.")
@@ -496,6 +506,7 @@ def run():
     ensure("FINISHED" in result, "Procedural fabric dye mode failed.")
     dye_material = garment.data.materials[0]
     ensure(dye_material.get("rh_studio_pattern") == "DYE"
+           and dye_material.get("rh_studio_material_type") == "procedural_fabric_dye"
            and abs(dye_material.get("rh_studio_edge_bleed", 0.0) - 0.12) < 1e-6
            and abs(dye_material.get("rh_studio_weave_strength", 0.0) - 0.65) < 1e-6,
            "Fabric dye mode metadata is incorrect.")
