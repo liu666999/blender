@@ -331,3 +331,12 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **测试：** 新增烟雾断言验证节点存在、Map Range 接入颜色 Mix、Bump 接入 Principled Normal，并检查 DYE 参数元数据。源码 `bcf375a5a550d716a02a7719dc3cf913103de768`，元数据修正 `d2abb54163ecb85eedb42a95ad90ff64fea044d0`，UI `803ceb8d0a26b62fc0a03dea4a847000a41e1367`，测试 `f8d8f23831a11d10399b9e29ad3afcbe72bbf3eb` / `f6335cf02cbadbadd5247a9c578525f7dca9cdba`。
 - **审计限制：** 节点平滑混色只提供视觉上类似染料渗开的边界，并未模拟液体扩散、纱线吸收、织物厚度或真实微纤维。高频 Noise 的效果也必须在真实服装上调整，程序节点构建成功不等于渲染质量合格。
 - **验证状态：** 尚未取得当前提交对应 Blender runtime/CI 输出；相关回归测试不代表已通过。
+
+
+## 2026-10-16 审计补充：统一角色控制器
+
+- **实现路径：** 新增 `RH_OT_create_character_root` 与 `RH_OT_fit_character_root_height`。创建控制器时读取已分类的角色层集合，优先创建位于整体底部中心的 Empty，将无父级顶层对象接入并恢复原 `matrix_world`；已有父级的对象保留原有关系。整体身高校准读取控制器后代网格的世界边界，按 `scene.unit_settings.scale_length` 换算目标米制身高，统一缩放后再把最低点移至 Z=0。
+- **回归覆盖：** smoke 在末尾清理测试场景后新建基础人体/皮肤两对象，测试父子关系、保持初始世界位置、根控制器平移传播、目标 1 米身高、底部 Z=0 和重复运行不复制控制器。
+- **边界：** 挂接仅遍历非 `OTHER` 的分类图层；已有外部父级会被跳过并提示，不会自动判断外部父级是否属于角色；整个角色身高校准要求控制器保持直立（X/Y 旋转为零）。复杂绑定和真实多层解剖仍需 GUI 手测。
+- **提交：** 算子 `9fda71a121ff45f929ec97b00207b1754986d2e2`；UI `53f75a84886b5d1e635804da734dd49abf5fe4ba`；测试 `a0d44e1b984a80fcfbe4378ba0e4a28995d448f9`。
+- **验证状态：** 源码与用例已写入分支，未取得对应 Blender runtime/CI 结果；不可视为测试通过。
