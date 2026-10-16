@@ -1431,6 +1431,62 @@ def run():
             ensure(actual_pose == expected_pose,
                    "Mid-write failure left pose changes on bone %s." % bone.name)
 
+    # Isolated test of one shared controller: category roots should keep their
+    # original world transforms, move together, and fit the requested group height.
+    clean_scene()
+    bpy.context.scene.unit_settings.scale_length = 1.0
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.5))
+    body_layer = bpy.context.object
+    body_layer.name = "RH Unified Root Body"
+    body_world_before = body_layer.matrix_world.copy()
+    rh_operators.move_objects_to_category([body_layer], bpy.context.scene, "BASE_BODY")
+
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 1.5))
+    skin_layer = bpy.context.object
+    skin_layer.name = "RH Unified Root Skin"
+    skin_world_before = skin_layer.matrix_world.copy()
+    rh_operators.move_objects_to_category([skin_layer], bpy.context.scene, "SKIN")
+
+    result = bpy.ops.rh_studio.create_character_root()
+    ensure("FINISHED" in result, "Unified character root creation failed.")
+    character_root = bpy.context.active_object
+    ensure(character_root and character_root.get("rh_studio_character_root")
+           and body_layer.parent == character_root and skin_layer.parent == character_root,
+           "Unified root did not parent the body and skin category roots.")
+    ensure((body_layer.matrix_world.translation - body_world_before.translation).length < 1e-5
+           and (skin_layer.matrix_world.translation - skin_world_before.translation).length < 1e-5,
+           "Creating the unified root changed child world positions.")
+    root_count = sum(1 for obj in bpy.context.scene.objects if obj.get("rh_studio_character_root"))
+    ensure(root_count == 1, "Unified character root must not duplicate on its first creation.")
+
+    original_body_x = body_layer.matrix_world.translation.x
+    original_skin_x = skin_layer.matrix_world.translation.x
+    character_root.location.x += 1.0
+    bpy.context.view_layer.update()
+    ensure(abs(body_layer.matrix_world.translation.x - original_body_x - 1.0) < 1e-5
+           and abs(skin_layer.matrix_world.translation.x - original_skin_x - 1.0) < 1e-5,
+           "Unified root translation did not move the body and skin together.")
+
+    result = bpy.ops.rh_studio.fit_character_root_height(target_height=1.0)
+    ensure("FINISHED" in result, "Unified character height calibration failed.")
+    bpy.context.view_layer.update()
+    root_corners = _unused = [
+        obj.matrix_world @ Vector(corner)
+        for obj in (body_layer, skin_layer)
+        for corner in obj.bound_box
+    ]
+    fitted_height = max(point.z for point in root_corners) - min(point.z for point in root_corners)
+    fitted_bottom = min(point.z for point in root_corners)
+    ensure(abs(fitted_height - 1.0) < 1e-4 and abs(fitted_bottom) < 1e-4,
+           "Unified root height calibration did not fit 1m and place the bottom on Z=0.")
+
+    root_before_repeat = character_root.as_pointer()
+    result = bpy.ops.rh_studio.create_character_root()
+    ensure("FINISHED" in result, "Updating an existing unified root failed.")
+    ensure(sum(1 for obj in bpy.context.scene.objects if obj.get("rh_studio_character_root")) == 1
+           and bpy.context.active_object.as_pointer() == root_before_repeat,
+           "Updating unified character root created a duplicate or switched controllers.")
+
     realhuman_studio.unregister()
     ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties were not unregistered.")
