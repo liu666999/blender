@@ -60,6 +60,15 @@ def run():
     realhuman_studio.register()
     ensure(hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties did not register.")
+    required_anatomy_categories = {
+        "SKIN", "FAT", "BONES", "MUSCLES", "NERVES", "VESSELS",
+        "ORGANS", "HAIR", "TISSUE",
+    }
+    available_categories = {item[0] for item in realhuman_studio.CATEGORY_ITEMS}
+    ensure(required_anatomy_categories.issubset(available_categories),
+           "One or more anatomical layer categories are missing from the import selector.")
+    ensure(required_anatomy_categories.issubset(rh_operators.CATEGORY_COLLECTIONS),
+           "One or more anatomical layer categories lack a collection mapping.")
     # Result viewer filtering and validation are pure helpers, so exercise them in background CI.
     sample_results = [
         {"object_name": "A", "status": "repaired"},
