@@ -482,6 +482,26 @@ def run():
     ensure("FINISHED" in result, "Fabric print material operator failed.")
     ensure(garment.data.materials and garment.data.materials[0].use_nodes,
            "Fabric material wasn't assigned.")
+    dot_material = garment.data.materials[0]
+    dot_nodes = list(dot_material.node_tree.nodes)
+    ensure(any(node.bl_idname == "ShaderNodeMapRange" for node in dot_nodes)
+           and any(node.bl_idname == "ShaderNodeTexNoise" for node in dot_nodes)
+           and any(node.bl_idname == "ShaderNodeBump" for node in dot_nodes),
+           "Fabric print material must include soft dye edges and a micrograin bump.")
+    ensure(abs(dot_material.get("rh_studio_edge_bleed", -1.0) - 0.06) < 1e-6
+           and abs(dot_material.get("rh_studio_weave_strength", -1.0) - 0.25) < 1e-6,
+           "Fabric dye-edge and weave controls were not persisted in material metadata.")
+    result = bpy.ops.rh_studio.create_fabric_print(
+        pattern="DYE", density=16.0, edge_bleed=0.12, weave_strength=0.65)
+    ensure("FINISHED" in result, "Procedural fabric dye mode failed.")
+    dye_material = garment.data.materials[0]
+    ensure(dye_material.get("rh_studio_pattern") == "DYE"
+           and abs(dye_material.get("rh_studio_edge_bleed", 0.0) - 0.12) < 1e-6
+           and abs(dye_material.get("rh_studio_weave_strength", 0.0) - 0.65) < 1e-6,
+           "Fabric dye mode metadata is incorrect.")
+    ensure(any(node.bl_idname == "ShaderNodeTexNoise" for node in dye_material.node_tree.nodes)
+           and any(node.bl_idname == "ShaderNodeMapRange" for node in dye_material.node_tree.nodes),
+           "Dye mode should create noise variation with softened boundaries.")
 
     # Verify object-coordinate mapping and face-region-only material assignment.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.5, 0.0, 1.0))
