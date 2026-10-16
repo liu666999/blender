@@ -201,6 +201,24 @@ def run():
     ensure((custom_key.data[0].co - custom_coord).length < 1e-6
            and abs(custom_key.value - 0.25) < 1e-6,
            "Updating body proportion keys modified an unrelated user shape key.")
+
+    # Silhouette templates should only set the four known proportion controls
+    # and must not rewrite unrelated user-created shape keys.
+    result = bpy.ops.rh_studio.apply_body_silhouette_preset(preset="FEMALE")
+    ensure("FINISHED" in result, "Female silhouette preset failed.")
+    ensure(abs(proportion_keys["RH体型 | 肩宽"].value - (-0.15)) < 1e-6
+           and abs(proportion_keys["RH体型 | 胸围"].value - 0.25) < 1e-6
+           and abs(proportion_keys["RH体型 | 腰围"].value - (-0.45)) < 1e-6
+           and abs(proportion_keys["RH体型 | 臀宽"].value - 0.55) < 1e-6,
+           "Female silhouette preset did not set the expected shoulder/chest/waist/hip values.")
+    ensure(abs(custom_key.value - 0.25) < 1e-6
+           and (custom_key.data[0].co - custom_coord).length < 1e-6,
+           "Silhouette preset modified an unrelated user shape key.")
+    result = bpy.ops.rh_studio.apply_body_silhouette_preset(preset="ATHLETIC")
+    ensure("FINISHED" in result
+           and abs(proportion_keys["RH体型 | 肩宽"].value - 0.80) < 1e-6
+           and abs(proportion_keys["RH体型 | 腰围"].value - (-0.25)) < 1e-6,
+           "Athletic silhouette preset values were not applied.")
     bpy.data.objects.remove(proportion_mesh, do_unlink=True)
 
     # Create only missing height-band masks on a subdivided mesh, and preserve
