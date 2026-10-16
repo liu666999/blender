@@ -314,3 +314,12 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **回归覆盖：** smoke test 检查所需解剖分类同时存在于 CATEGORY_ITEMS 与 CATEGORY_COLLECTIONS；该断言只能检查代码结构，不能证明 Blender 的 Collection API 和 UI 实际正常。
 - **提交：** 类别枚举 `5413c9f1b20c8a5ef23d0e1c73f282504d049435`；映射 `bbcfb167d4b10020639c3f78a1a41d04763032aa`；测试 `8eb09220b25e7ef4db462401b332a147c957876b`。模板按钮排布调整 `2f44013039f3337f74a1ba7787de4c2f3246ff93`。
 - **风险/边界：** 新类别仅是资源容器及显隐分类，不会自动生成真实脂肪/毛发/筋膜；必须导入合规模型，并对层间对齐及统一缩放另行验收。当前没有对应的 Blender runtime/CI 通过证据。
+
+
+## 2026-10-16 审计补充：开源解剖资产候选（未导入）
+
+- **基础人体候选：** Blender Studio Human Base Meshes v1.4.1，官方 demo-file 页面将该资产包标为 CC0、约 49 MB、Blender 4.2+。仍需实际选取具体网格并运行真实人体验证脚本。
+- **解剖候选：** GitHub 仓库 Charleeh/ecorche 的 README 声明模型为 CC BY-SA 4.0；含 634 个独立命名网格、骨骼/软骨/牙齿/眼部、深浅层肌肉和部分筋膜。其坐标单位、Y-up 朝向与 0.0001 根缩放需按上游说明验证。
+- **已知缺失：** 单一成年男性，不含皮肤、脂肪、内脏、血管、神经，且无绑定/姿势。它不能满足完整人体需求，只是可组合的解剖部件来源。
+- **许可边界：** 需随使用内容保留上游署名与 CC BY-SA 4.0 条件；不将模型资产错误地归为 CC0，也不在未经许可边界整理的情况下随 GPL 插件二进制打包。
+- **验证状态：** 仅完成来源与 README 级别研究，未导入本项目、未核验实际 Blender 变换，也未检查每个部件的视觉对齐/质量。正式集成前仍需许可和技术复核。
