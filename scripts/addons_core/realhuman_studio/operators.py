@@ -296,8 +296,11 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             _call_import_operator(filepath)
             imported = [obj for obj in bpy.data.objects if obj.as_pointer() not in before]
             if not imported:
-                self.report({"WARNING"}, "导入器完成了操作，但没有产生新对象。")
-                return {"CANCELLED"}
+                # A nominally successful importer can still create materials,
+                # images, or other datablocks without adding an object. Treat
+                # that as a failed transaction so the shared rollback path
+                # removes those partial results instead of leaking them.
+                raise RuntimeError("导入器完成了操作，但没有产生新对象。")
             move_objects_to_category(imported, context.scene, self.category, filepath)
             batch_id = uuid.uuid4().hex
             imported_at = datetime.now().astimezone().isoformat(timespec="seconds")
