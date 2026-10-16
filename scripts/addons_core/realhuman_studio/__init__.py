@@ -54,6 +54,7 @@ def unregister():
     ui.unregister()
     operators.unregister()
     for name in ("rh_studio_import_category", "rh_studio_target_height",
-                 "rh_studio_library_root", "rh_studio_project_root"):
+                 "rh_studio_library_root", "rh_studio_project_root",
+                 "rh_studio_sculpt_radius", "rh_studio_sculpt_strength"):
         if hasattr(bpy.types.Scene, name):
             delattr(bpy.types.Scene, name)
