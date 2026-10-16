@@ -60,6 +60,9 @@ def run():
     realhuman_studio.register()
     ensure(hasattr(bpy.types.Scene, "rh_studio_target_height"),
            "Scene properties did not register.")
+    ensure(hasattr(bpy.types.Scene, "rh_studio_sculpt_radius")
+           and hasattr(bpy.types.Scene, "rh_studio_sculpt_strength"),
+           "Sculpt brush settings did not register.")
     required_anatomy_categories = {
         "SKIN", "FAT", "BONES", "MUSCLES", "NERVES", "VESSELS",
         "ORGANS", "HAIR", "TISSUE",
@@ -1487,8 +1490,24 @@ def run():
            and bpy.context.active_object.as_pointer() == root_before_repeat,
            "Updating unified character root created a duplicate or switched controllers.")
 
+    # Exercise actual native Sculpt Mode activation. Headless mode may not have
+    # a VIEW_3D workspace tool context, so brush-tool switching can warn while
+    # Sculpt Mode itself must still activate.
+    clean_scene()
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.5))
+    sculpt_mesh = bpy.context.object
+    sculpt_mesh.name = "RH CI Sculpt Mesh"
+    activate(sculpt_mesh)
+    result = bpy.ops.rh_studio.enter_sculpt_mode(
+        brush_preset="CLAY_STRIPS", radius=72, strength=0.42)
+    ensure("FINISHED" in result and sculpt_mesh.mode == "SCULPT",
+           "Sculpt workflow operator did not enter native Sculpt Mode.")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
     realhuman_studio.unregister()
-    ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height"),
+    ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height")
+           and not hasattr(bpy.types.Scene, "rh_studio_sculpt_radius")
+           and not hasattr(bpy.types.Scene, "rh_studio_sculpt_strength"),
            "Scene properties were not unregistered.")
     print("REALHUMAN_STUDIO_SMOKE_TEST: PASS")
     print("Blender runtime:", bpy.app.version_string)
