@@ -16,10 +16,11 @@ from . import CATEGORY_ITEMS
 
 ROOT_COLLECTION = "RealHuman Studio"
 CATEGORY_COLLECTIONS = {
-    "BASE_BODY": "01 基础人体", "SKIN": "02 皮肤", "BONES": "03 骨骼",
-    "MUSCLES": "04 肌肉", "ORGANS": "05 器官", "NERVES": "06 神经",
-    "VESSELS": "07 血管", "CLOTHING": "08 服装",
-    "RIG": "09 骨架绑定", "OTHER": "10 其他资源",
+    "BASE_BODY": "01 基础人体", "SKIN": "02 皮肤", "FAT": "03 脂肪层",
+    "BONES": "04 骨骼", "MUSCLES": "05 肌肉", "NERVES": "06 神经",
+    "VESSELS": "07 血管", "ORGANS": "08 内脏器官", "HAIR": "09 毛发",
+    "TISSUE": "10 筋膜与其他组织", "CLOTHING": "11 服装",
+    "RIG": "12 骨架绑定", "OTHER": "13 其他资源",
 }
 SUPPORTED_IMPORTS = {".obj", ".fbx", ".glb", ".gltf", ".stl", ".ply"}
 
