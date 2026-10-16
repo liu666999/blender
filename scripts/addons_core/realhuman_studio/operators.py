@@ -9,7 +9,7 @@ from pathlib import Path
 import uuid
 import bpy
 import bmesh
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Matrix, Quaternion, Vector
 from . import CATEGORY_ITEMS
@@ -2153,6 +2153,112 @@ class RH_OT_fit_character_root_height(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_enter_sculpt_mode(bpy.types.Operator):
+    bl_idname = "rh_studio.enter_sculpt_mode"
+    bl_label = "进入原生雕刻模式"
+    bl_description = (
+        "Enter Blender Sculpt Mode and activate a native clay, draw, grab, smooth, "
+        "crease, scrape or inflate brush"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    brush_preset: EnumProperty(
+        name="笔刷",
+        items=(
+            ("CLAY_STRIPS", "泥塑堆积", "Clay Strips: build broad volumes"),
+            ("DRAW", "推拉", "Draw: push/pull local surface"),
+            ("GRAB", "抓取", "Grab: move broad regions"),
+            ("SMOOTH", "平滑", "Smooth: soften sculpted transitions"),
+            ("CREASE", "刻线", "Crease: carve sharper grooves"),
+            ("SCRAPE", "刮削", "Scrape: flatten and scrape a surface"),
+            ("INFLATE", "鼓起", "Inflate: expand local surface"),
+        ),
+        default="CLAY_STRIPS",
+    )
+    radius: IntProperty(name="笔刷半径（像素）", default=64, min=1, max=500)
+    strength: FloatProperty(name="笔刷强度", default=0.5, min=0.0, max=1.0, subtype="FACTOR")
+
+    _TOOL_IDS = {
+        "CLAY_STRIPS": "builtin_brush.Clay Strips",
+        "DRAW": "builtin_brush.Draw",
+        "GRAB": "builtin_brush.Grab",
+        "SMOOTH": "builtin_brush.Smooth",
+        "CREASE": "builtin_brush.Crease",
+        "SCRAPE": "builtin_brush.Scrape",
+        "INFLATE": "builtin_brush.Inflate",
+    }
+    _BRUSH_LABELS = {
+        "CLAY_STRIPS": "泥塑堆积", "DRAW": "推拉", "GRAB": "抓取",
+        "SMOOTH": "平滑", "CREASE": "刻线", "SCRAPE": "刮削", "INFLATE": "鼓起",
+    }
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH")
+
+    def execute(self, context):
+        obj = context.active_object
+        original_mode = obj.mode
+        if original_mode not in {"OBJECT", "SCULPT"}:
+            try:
+                bpy.ops.object.mode_set(mode="OBJECT")
+            except RuntimeError as exc:
+                self.report({"ERROR"}, "无法离开当前模式以进入雕刻：" + str(exc))
+                return {"CANCELLED"}
+
+        try:
+            if obj.mode != "SCULPT":
+                result = bpy.ops.object.mode_set(mode="SCULPT")
+                if "FINISHED" not in result:
+                    raise RuntimeError("Blender did not enter Sculpt Mode")
+        except (RuntimeError, TypeError) as exc:
+            if original_mode not in {"OBJECT", "SCULPT"} and obj.name in context.view_layer.objects:
+                try:
+                    bpy.ops.object.mode_set(mode=original_mode)
+                except RuntimeError:
+                    pass
+            self.report({"ERROR"}, "进入 Blender 原生雕刻模式失败：" + str(exc))
+            return {"CANCELLED"}
+
+        tool_ready = False
+        try:
+            result = bpy.ops.wm.tool_set_by_id(
+                name=self._TOOL_IDS[self.brush_preset], space_type="VIEW_3D")
+            tool_ready = "FINISHED" in result
+        except (RuntimeError, TypeError, KeyError):
+            # Background mode and non-3D editor contexts have no active viewport
+            # tool to switch. Keep sculpt mode usable; user can choose the tool
+            # from the viewport toolbar in that case.
+            tool_ready = False
+
+        brush = None
+        try:
+            brush = context.tool_settings.sculpt.brush
+            if brush is not None:
+                brush.size = int(self.radius)
+                brush.strength = float(self.strength)
+        except (AttributeError, TypeError, ValueError):
+            brush = None
+
+        label = self._BRUSH_LABELS[self.brush_preset]
+        if not tool_ready:
+            self.report(
+                {"WARNING"},
+                "已进入原生雕刻模式；当前上下文无法自动切换“%s”，请在 3D 视图工具栏选择。"
+                "已尝试设置笔刷半径和强度。" % label
+            )
+        elif brush is None:
+            self.report({"WARNING"}, "已启用%s工具，但当前版本未暴露活动笔刷属性；可在工具设置中调整。" % label)
+        else:
+            self.report(
+                {"INFO"},
+                "已进入原生雕刻模式：%s，半径 %d px，强度 %.2f。建议先保存副本；修改可用 Blender 撤销。" %
+                (label, int(self.radius), float(self.strength))
+            )
+        return {"FINISHED"}
+
+
 class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
     bl_idname = "rh_studio.generate_body_proportion_keys"
     bl_label = "生成 / 更新体型控制"
@@ -4234,7 +4340,7 @@ CLASSES = (
     RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
     RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_enter_sculpt_mode, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
