@@ -2433,7 +2433,7 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
                 bpy.data.materials.remove(material)
             self.report({"WARNING"}, "没有可应用的网格；若在编辑模式，请先选中至少一个面。")
             return {"CANCELLED"}
-        material["rh_studio_material_type"] = "procedural_fabric_print"
+        material["rh_studio_material_type"] = ("procedural_fabric_dye" if self.pattern == "DYE" else "procedural_fabric_print")
         material["rh_studio_pattern"] = self.pattern
         material["rh_studio_density"] = self.density
         material["rh_studio_sparsity"] = self.sparsity
