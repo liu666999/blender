@@ -9,7 +9,7 @@ bl_info = {
     "category": "3D View",
 }
 import bpy
-from bpy.props import EnumProperty, FloatProperty, StringProperty
+from bpy.props import EnumProperty, FloatProperty, IntProperty, StringProperty
 
 CATEGORY_ITEMS = (
     ("BASE_BODY", "基础人体", "Primary full-body mesh"),
@@ -35,6 +35,12 @@ def register():
     bpy.types.Scene.rh_studio_target_height = FloatProperty(
         name="目标身高", description="Uniformly scale the active mesh to this world-space height",
         default=1.75, min=0.1, max=3.0, precision=3, unit="LENGTH")
+    bpy.types.Scene.rh_studio_sculpt_radius = IntProperty(
+        name="雕刻笔刷半径", description="Native Blender sculpt brush radius in pixels",
+        default=64, min=1, max=500)
+    bpy.types.Scene.rh_studio_sculpt_strength = FloatProperty(
+        name="雕刻笔刷强度", description="Native Blender sculpt brush strength",
+        default=0.5, min=0.0, max=1.0, precision=3, subtype="FACTOR")
     bpy.types.Scene.rh_studio_library_root = StringProperty(
         name="资源目录", description="Starting directory for model import dialogs",
         default="//", subtype="DIR_PATH")
