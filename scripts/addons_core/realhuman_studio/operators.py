@@ -2264,9 +2264,16 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
     pattern: EnumProperty(name="图案", items=(
         ("DOTS", "圆点", "Voronoi-based dotted print"),
         ("STRIPES", "条纹", "Wave-based stripe print"),
-        ("CHECKER", "格纹", "Checkerboard print")), default="DOTS")
+        ("CHECKER", "格纹", "Checkerboard print"),
+        ("DYE", "浸染 / 染色", "Noise-based mottled dye absorption")), default="DOTS")
     density: FloatProperty(name="图案密度", description="Higher values create more repeats per UV tile", default=12.0, min=1.0, max=100.0)
     sparsity: FloatProperty(name="稀疏度", description="Higher values leave more base fabric visible", default=0.35, min=0.0, max=0.95, subtype="FACTOR")
+    edge_bleed: FloatProperty(
+        name="浸染边缘扩散", description="Soften dye/print boundaries; a procedural approximation, not a physical cloth solver",
+        default=0.06, min=0.0, max=0.25, subtype="FACTOR")
+    weave_strength: FloatProperty(
+        name="织物微纹理", description="Procedural fiber grain bump intensity",
+        default=0.25, min=0.0, max=1.0, subtype="FACTOR")
     rotation: FloatProperty(name="旋转（度）", default=0.0, min=-math.pi, max=math.pi, subtype="ANGLE")
     coordinate_source: EnumProperty(name="坐标来源", items=(
         ("UV", "UV 贴图", "Use the garment's UV map"),
@@ -2291,6 +2298,8 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         layout.prop(self, "pattern")
         layout.prop(self, "density")
         layout.prop(self, "sparsity", slider=True)
+        layout.prop(self, "edge_bleed", slider=True)
+        layout.prop(self, "weave_strength", slider=True)
         layout.prop(self, "rotation")
         layout.prop(self, "coordinate_source")
         row = layout.row(align=True)
@@ -2323,13 +2332,24 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         mapping = nodes.new("ShaderNodeMapping")
         mapping.location = (-600, 80)
         mapping.inputs["Rotation"].default_value[2] = self.rotation
-        mapping.inputs["Scale"].default_value = (
-            self.density * self.scale_x, self.density * self.scale_y, self.density)
+        if self.pattern == "DYE":
+            mapping.inputs["Scale"].default_value = (self.scale_x, self.scale_y, 1.0)
+        else:
+            mapping.inputs["Scale"].default_value = (
+                self.density * self.scale_x, self.density * self.scale_y, self.density)
         mapping.inputs["Location"].default_value = (self.offset_x, self.offset_y, 0.0)
         coordinate_socket = {"UV": "UV", "OBJECT": "Object", "GENERATED": "Generated"}[self.coordinate_source]
         links.new(texcoord.outputs[coordinate_socket], mapping.inputs["Vector"])
 
-        if self.pattern == "DOTS":
+        if self.pattern == "DYE":
+            # Broad procedural noise creates mottled dye patches. The softened
+            # threshold below lets color bleed gradually into the base fabric.
+            texture = nodes.new("ShaderNodeTexNoise")
+            texture.inputs["Scale"].default_value = max(0.5, min(20.0, self.density / 4.0))
+            texture.inputs["Detail"].default_value = 3.0
+            texture.inputs["Roughness"].default_value = 0.65
+            value_socket = texture.outputs["Fac"]
+        elif self.pattern == "DOTS":
             texture = nodes.new("ShaderNodeTexVoronoi")
             texture.inputs["Scale"].default_value = 1.0
             value_socket = texture.outputs["Distance"]
@@ -2347,19 +2367,45 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         texture.location = (-350, 80)
         links.new(mapping.outputs["Vector"], texture.inputs["Vector"])
 
-        threshold = nodes.new("ShaderNodeMath")
-        threshold.operation = "LESS_THAN"
-        threshold.location = (-100, 80)
-        threshold.inputs[1].default_value = max(0.02, 1.0 - self.sparsity)
-        links.new(value_socket, threshold.inputs[0])
+        # A smoothstep range softens the edge between base textile and dye/ink.
+        # It models a controllable visual bleed, not a physically simulated fluid.
+        dye_threshold = max(0.02, 1.0 - self.sparsity)
+        edge_width = max(0.0001, float(self.edge_bleed))
+        edge_mask = nodes.new("ShaderNodeMapRange")
+        edge_mask.location = (-100, 80)
+        edge_mask.interpolation_type = "SMOOTHSTEP"
+        edge_mask.clamp = True
+        edge_mask.inputs["From Min"].default_value = max(0.0, dye_threshold - edge_width)
+        edge_mask.inputs["From Max"].default_value = min(1.0, dye_threshold + edge_width)
+        edge_mask.inputs["To Min"].default_value = 1.0
+        edge_mask.inputs["To Max"].default_value = 0.0
+        links.new(value_socket, edge_mask.inputs["Value"])
+
         mix = nodes.new("ShaderNodeMixRGB")
         mix.location = (150, 80)
         mix.blend_type = "MIX"
         # RGBA Mix sockets are typed and exposed by Blender 4.x/5.x.
-        links.new(threshold.outputs[0], mix.inputs[0])
+        links.new(edge_mask.outputs["Result"], mix.inputs[0])
         mix.inputs[1].default_value = self.base_color
         mix.inputs[2].default_value = self.print_color
         links.new(mix.outputs[0], shader.inputs["Base Color"])
+
+        # A subtle procedural micrograin breaks up the perfectly smooth surface.
+        # It is deliberately separate from the print UV mapping so density and
+        # dye placement remain independent from the material's fiber texture.
+        weave = nodes.new("ShaderNodeTexNoise")
+        weave.location = (-600, -260)
+        weave.inputs["Scale"].default_value = 240.0
+        weave.inputs["Detail"].default_value = 2.0
+        weave.inputs["Roughness"].default_value = 0.72
+        links.new(texcoord.outputs[coordinate_socket], weave.inputs["Vector"])
+        bump = nodes.new("ShaderNodeBump")
+        bump.location = (150, -180)
+        bump.inputs["Strength"].default_value = 0.25 * self.weave_strength
+        bump.inputs["Distance"].default_value = 0.01
+        links.new(weave.outputs["Fac"], bump.inputs["Height"])
+        links.new(bump.outputs["Normal"], shader.inputs["Normal"])
+        shader.inputs["Roughness"].default_value = 0.62
         assigned = 0
         face_region_count = 0
         for obj in meshes:
@@ -2391,6 +2437,8 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         material["rh_studio_pattern"] = self.pattern
         material["rh_studio_density"] = self.density
         material["rh_studio_sparsity"] = self.sparsity
+        material["rh_studio_edge_bleed"] = self.edge_bleed
+        material["rh_studio_weave_strength"] = self.weave_strength
         material["rh_studio_rotation_degrees"] = self.rotation * 57.295779513
         material["rh_studio_coordinate_source"] = self.coordinate_source
         material["rh_studio_offset_x"] = self.offset_x
@@ -2398,9 +2446,10 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         material["rh_studio_scale_x"] = self.scale_x
         material["rh_studio_scale_y"] = self.scale_y
         if face_region_count:
-            message = "已为 %d 个网格的 %d 个选中面应用局部印花。" % (assigned, face_region_count)
+            message = "已为 %d 个网格的 %d 个选中面应用局部印花/染色。" % (assigned, face_region_count)
         else:
-            message = "已为 %d 个网格应用印花材质。" % assigned
+            message = "已为 %d 个网格应用印花/浸染材质。" % assigned
+        message += " 浸染边缘为程序化近似，织物微纹理不等同于真实布料流体/纤维物理模拟。"
         self.report({"INFO"}, message)
         return {"FINISHED"}
 
