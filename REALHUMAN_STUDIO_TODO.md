@@ -312,4 +312,12 @@
 
 ### 验证状态
 
-最新代码/测试提交没有可确认的 Blender runtime/CI 结果；GitHub 检查接口当前返回空状态。静态代码审阅和测试用例编写不等于测试运行通过。接下来应由真实 Blender runtime 执行完整 smoke suite，随后在真实人体、解剖结构与服装模型上做 GUI/视觉验收。
+最新代码/测试提交没有可确认的 Blender runtime/CI 结果；GitHub 检查接口当前返回空状态。静态代码审阅和测试用例编写不等于测试运行通过。接下来应由真实 Blender runtime 执行完整 smoke suite，随后在真实人体、解剖结构与服装模型上做 GUI/视觉验收。## 2026-10-16 原生雕刻快捷入口状态
+
+
+## 2026-10-16 新增待办：原生雕刻工具 GUI 验收
+
+- [ ] 在目标 Blender GUI 选择真实人体网格，逐一执行 Clay Strips、Draw、Grab、Smooth、Crease、Scrape、Inflate，确认工具栏真实切换、笔刷半径/强度更新且能够实际修改网格。
+- [ ] 验证 Sculpt Mode 的撤销/重做、对称、遮罩、动态拓扑/多分辨率及与现有 shape keys 的关系；在破坏性雕刻前提醒用户保存副本。
+- [ ] 在目标 Blender runtime 执行完整 smoke suite；当前新增用例仅验证原生 Sculpt Mode 进入和场景属性清理，不能替代笔刷切换和视觉质量验收。
+- [ ] 未来若要自研雕刻扩展，优先复用 Blender 原生网格雕刻、动态拓扑与多分辨率，不要重复实现基础笔刷引擎；新能力须提供可测量的工作流而非只增加按钮。
