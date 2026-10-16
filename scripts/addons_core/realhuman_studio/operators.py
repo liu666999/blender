@@ -23,6 +23,15 @@ CATEGORY_COLLECTIONS = {
 }
 SUPPORTED_IMPORTS = {".obj", ".fbx", ".glb", ".gltf", ".stl", ".ply"}
 
+# Region mask width is expressed as a fraction of the mesh's local Z height.
+# These are deliberately coarse starting masks; artists can refine the weights.
+BODY_PROPORTION_SPECS = (
+    ("RH体型 | 肩宽", "肩宽", 0.79, 0.075, 0.16, 0.06, 0.12),
+    ("RH体型 | 胸围", "胸围", 0.66, 0.085, 0.12, 0.14, 0.11),
+    ("RH体型 | 腰围", "腰围", 0.52, 0.070, 0.18, 0.16, 0.085),
+    ("RH体型 | 臀宽", "臀宽", 0.42, 0.075, 0.16, 0.10, 0.10),
+)
+
 def category_collection(scene, category, create=False):
     """Return a category collection, optionally creating the collection scaffold."""
     name = CATEGORY_COLLECTIONS.get(category)
@@ -1969,16 +1978,10 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
         center_x = (min_x + max_x) * 0.5
         center_y = (min_y + max_y) * 0.5
         # name, label, vertical center, vertical falloff, X width, Y depth
-        specs = (
-            ("RH体型 | 肩宽", "肩宽", 0.79, 0.075, 0.16, 0.06),
-            ("RH体型 | 胸围", "胸围", 0.66, 0.085, 0.12, 0.14),
-            ("RH体型 | 腰围", "腰围", 0.52, 0.070, 0.18, 0.16),
-            ("RH体型 | 臀宽", "臀宽", 0.42, 0.075, 0.16, 0.10),
-        )
         blocks = obj.data.shape_keys.key_blocks
         created = 0
         updated = 0
-        for key_name, label, center_ratio, sigma_ratio, x_amount, y_amount in specs:
+        for key_name, label, center_ratio, sigma_ratio, x_amount, y_amount, _mask_half_width in BODY_PROPORTION_SPECS:
             key = blocks.get(key_name)
             if key is None:
                 key = obj.shape_key_add(name=key_name, from_mix=False)
@@ -2026,6 +2029,72 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
             "体型控制已就绪：新建 %d 个，更新 %d 个，使用区域遮罩 %d 个。滑块范围为 -1 到 1。" %
             (created, updated, masked)
         )
+        return {"FINISHED"}
+
+
+class RH_OT_create_body_proportion_masks(bpy.types.Operator):
+    bl_idname = "rh_studio.create_body_proportion_masks"
+    bl_label = "创建初始体型区域遮罩"
+    bl_description = "Create only missing shoulder/chest/waist/hip vertex groups using local Z height bands"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and len(obj.data.vertices) >= 4)
+
+    def execute(self, context):
+        obj = context.active_object
+        shape_keys = obj.data.shape_keys
+        basis = shape_keys.key_blocks[0] if shape_keys else None
+        base_coords = (
+            [basis.data[i].co.copy() for i in range(len(obj.data.vertices))]
+            if basis else [vertex.co.copy() for vertex in obj.data.vertices]
+        )
+        if not base_coords or any(
+                not (math.isfinite(co.x) and math.isfinite(co.y) and math.isfinite(co.z))
+                for co in base_coords):
+            self.report({"ERROR"}, "网格为空或包含 NaN / 无穷坐标，未创建遮罩。")
+            return {"CANCELLED"}
+
+        min_z = min(co.z for co in base_coords)
+        max_z = max(co.z for co in base_coords)
+        height = max_z - min_z
+        if not math.isfinite(height) or height < 1e-6:
+            self.report({"ERROR"}, "网格局部 Z 高度异常，无法生成高度遮罩。")
+            return {"CANCELLED"}
+
+        created = 0
+        preserved = 0
+        empty_regions = []
+        for _key_name, label, center_ratio, _sigma_ratio, _x_amount, _y_amount, half_width in BODY_PROPORTION_SPECS:
+            group_name = "RH遮罩 | " + label
+            if obj.vertex_groups.get(group_name) is not None:
+                # Never overwrite artist-painted weights on an existing mask.
+                preserved += 1
+                continue
+
+            lower = center_ratio - half_width
+            upper = center_ratio + half_width
+            indices = [
+                index for index, co in enumerate(base_coords)
+                if lower <= (co.z - min_z) / height <= upper
+            ]
+            if not indices:
+                empty_regions.append(label)
+                continue
+
+            group = obj.vertex_groups.new(name=group_name)
+            group.add(indices, 1.0, "REPLACE")
+            created += 1
+
+        if created:
+            context.view_layer.update()
+        message = "已创建 %d 个初始高度遮罩，保留 %d 个现有遮罩。" % (created, preserved)
+        if empty_regions:
+            message += " 以下区域没有顶点落入高度范围：%s。" % "、".join(empty_regions)
+        message += " 遮罩仅按局部 Z 高度粗分区；请检查模型朝向，并用权重绘制精修。"
+        self.report({"INFO"} if not empty_regions else {"WARNING"}, message)
         return {"FINISHED"}
 
 
@@ -3802,7 +3871,7 @@ CLASSES = (
     RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
     RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
