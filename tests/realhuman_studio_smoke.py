@@ -944,6 +944,33 @@ def run():
         ensure({mesh.as_pointer() for mesh in bpy.data.meshes} == meshes_before_failed_import,
                "Failed asset import left an orphan mesh datablock.")
 
+        # If an importer reports FINISHED but creates no object, any new
+        # material/image datablocks must still be rolled back.
+        empty_import_source = os.path.join(tmp, "empty_import_asset.fbx")
+        with open(empty_import_source, "wb") as stream:
+            stream.write(b"empty import fixture")
+        materials_before_empty_import = {
+            material.as_pointer() for material in bpy.data.materials
+        }
+        original_import_call = rh_operators._call_import_operator
+        def create_material_without_object(filepath):
+            bpy.data.materials.new("RH_empty_import_orphan_material")
+            return {"FINISHED"}
+        rh_operators._call_import_operator = create_material_without_object
+        try:
+            try:
+                empty_import_result = bpy.ops.rh_studio.import_asset(
+                    filepath=empty_import_source, category="BASE_BODY")
+            except RuntimeError:
+                empty_import_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+        ensure("CANCELLED" in empty_import_result,
+               "An import producing no objects should be cancelled.")
+        ensure({material.as_pointer() for material in bpy.data.materials}
+               == materials_before_empty_import,
+               "An object-less failed import leaked a material datablock.")
+
         # A failure after category setup must also remove transaction-created
         # collections, not only the imported object and its mesh datablock.
         category_rollback_source = os.path.join(tmp, "category_rollback_asset.fbx")
