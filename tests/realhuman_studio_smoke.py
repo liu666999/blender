@@ -1470,7 +1470,7 @@ def run():
     result = bpy.ops.rh_studio.fit_character_root_height(target_height=1.0)
     ensure("FINISHED" in result, "Unified character height calibration failed.")
     bpy.context.view_layer.update()
-    root_corners = _unused = [
+    root_corners = [
         obj.matrix_world @ Vector(corner)
         for obj in (body_layer, skin_layer)
         for corner in obj.bound_box
