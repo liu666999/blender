@@ -203,6 +203,57 @@ def run():
            "Updating body proportion keys modified an unrelated user shape key.")
     bpy.data.objects.remove(proportion_mesh, do_unlink=True)
 
+    # Create only missing height-band masks on a subdivided mesh, and preserve
+    # pre-existing/artist-edited weights when the operator is run again.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 3.0, 0.0))
+    mask_mesh = bpy.context.object
+    mask_mesh.name = "RH CI Mask Mesh"
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.subdivide(number_cuts=8)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    activate(mask_mesh)
+    result = bpy.ops.rh_studio.create_body_proportion_masks()
+    ensure("FINISHED" in result, "Initial body-proportion mask creation failed.")
+    mask_specs = (
+        ("肩宽", 0.79, 0.12),
+        ("胸围", 0.66, 0.11),
+        ("腰围", 0.52, 0.085),
+        ("臀宽", 0.42, 0.10),
+    )
+    mask_min_z = min(vertex.co.z for vertex in mask_mesh.data.vertices)
+    mask_height = max(vertex.co.z for vertex in mask_mesh.data.vertices) - mask_min_z
+    for label, center_ratio, half_width in mask_specs:
+        group = mask_mesh.vertex_groups.get("RH遮罩 | " + label)
+        ensure(group is not None, "Missing generated initial mask: " + label)
+        assigned = {}
+        for vertex in mask_mesh.data.vertices:
+            for membership in vertex.groups:
+                if membership.group == group.index:
+                    assigned[vertex.index] = membership.weight
+                    break
+        ensure(assigned, "Generated initial mask has no weighted vertices: " + label)
+        ensure(all(abs(weight - 1.0) < 1e-6 for weight in assigned.values()),
+               "Initial mask weights should start at 1.0: " + label)
+        ensure(all(abs((mask_mesh.data.vertices[index].co.z - mask_min_z) / mask_height - center_ratio)
+                   <= half_width + 1e-6 for index in assigned),
+               "Initial mask includes vertices outside its expected height band: " + label)
+
+    shoulder_group = mask_mesh.vertex_groups["RH遮罩 | 肩宽"]
+    edited_index = next(iter(
+        index for index in range(len(mask_mesh.data.vertices))
+        if any(membership.group == shoulder_group.index
+               for membership in mask_mesh.data.vertices[index].groups)
+    ))
+    shoulder_group.add([edited_index], 0.25, "REPLACE")
+    result = bpy.ops.rh_studio.create_body_proportion_masks()
+    ensure("FINISHED" in result, "Re-running initial mask creation failed.")
+    ensure(abs(shoulder_group.weight(edited_index) - 0.25) < 1e-6,
+           "Re-running mask creation overwrote an existing artist weight.")
+    ensure(sum(1 for group in mask_mesh.vertex_groups
+               if group.name.startswith("RH遮罩 | ")) == 4,
+           "Re-running mask creation produced duplicate region groups.")
+    bpy.data.objects.remove(mask_mesh, do_unlink=True)
+
     # Exercise the same rig-generation operator the UI calls, but disable
     # automatic weights so this test is deterministic and mesh-topology agnostic.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.95))
