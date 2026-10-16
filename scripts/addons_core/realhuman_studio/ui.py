@@ -76,6 +76,25 @@ class RH_PT_main(bpy.types.Panel):
             select = row.operator("rh_studio.select_category", text="", icon="RESTRICT_SELECT_OFF")
             select.category = category
 
+        sculpt_box = layout.box()
+        sculpt_box.label(text="泥塑式雕刻（Blender 原生笔刷）", icon="SCULPTMODE_HLT")
+        sculpt_box.prop(scene, "rh_studio_sculpt_radius", text="笔刷半径")
+        sculpt_box.prop(scene, "rh_studio_sculpt_strength", text="笔刷强度")
+        row = sculpt_box.row(align=True)
+        for brush, label in (("CLAY_STRIPS", "泥塑堆积"), ("DRAW", "推拉"),
+                             ("GRAB", "抓取"), ("SMOOTH", "平滑")):
+            op = row.operator("rh_studio.enter_sculpt_mode", text=label)
+            op.brush_preset = brush
+            op.radius = scene.rh_studio_sculpt_radius
+            op.strength = scene.rh_studio_sculpt_strength
+        row = sculpt_box.row(align=True)
+        for brush, label in (("CREASE", "刻线"), ("SCRAPE", "刮削"), ("INFLATE", "鼓起")):
+            op = row.operator("rh_studio.enter_sculpt_mode", text=label)
+            op.brush_preset = brush
+            op.radius = scene.rh_studio_sculpt_radius
+            op.strength = scene.rh_studio_sculpt_strength
+        sculpt_box.label(text="使用原生网格雕刻笔刷，不模拟真实物质流变；复杂雕刻前请保存副本或使用多分辨率。")
+
         body = layout.box()
         body.label(text="比例与形态", icon="MOD_MESHDEFORM")
         body.prop(scene, "rh_studio_target_height")
