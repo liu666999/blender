@@ -78,8 +78,11 @@ class RH_PT_main(bpy.types.Panel):
                       text="创建缺失的肩胸腰臀初始遮罩")
         preset_row = body.row(align=True)
         for preset, label in (("MALE", "男性轮廓"), ("FEMALE", "女性轮廓"),
-                              ("ATHLETIC", "运动型"), ("SLIM", "纤瘦型"),
-                              ("HEAVY", "厚实体型")):
+                              ("ATHLETIC", "运动型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
+            op.preset = preset
+        preset_row = body.row(align=True)
+        for preset, label in (("SLIM", "纤瘦型"), ("HEAVY", "厚实体型")):
             op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
             op.preset = preset
         body.label(text="轮廓模板仅设置现有肩胸腰臀形态键；不是完整男女模型生成器，肌肉/脂肪、五官、毛发需要基础资产提供对应控制。")
