@@ -358,4 +358,12 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 
 ### 验证状态
 
-最新代码/测试提交没有可确认的 Blender runtime/CI 结果；GitHub 检查接口当前返回空状态。静态代码审阅和测试用例编写不等于测试运行通过。接下来应由真实 Blender runtime 执行完整 smoke suite，随后在真实人体、解剖结构与服装模型上做 GUI/视觉验收。
+最新代码/测试提交没有可确认的 Blender runtime/CI 结果；GitHub 检查接口当前返回空状态。静态代码审阅和测试用例编写不等于测试运行通过。接下来应由真实 Blender runtime 执行完整 smoke suite，随后在真实人体、解剖结构与服装模型上做 GUI/视觉验收。## 2026-10-16 原生雕刻快捷入口状态
+
+
+## 2026-10-16 审计补充：原生 Sculpt Mode 快捷入口
+
+- **实现：** 新增 `RH_OT_enter_sculpt_mode`；在活动对象为 Mesh 时切换至 Sculpt Mode，并通过 Blender 的 `bpy.ops.wm.tool_set_by_id(name=..., space_type="VIEW_3D")` 尝试设置原生 Clay Strips、Draw、Grab、Smooth、Crease、Scrape、Inflate 工具。笔刷半径/强度由 Scene 属性控制并同步到可用的当前 brush。
+- **上下文处理：** 无 VIEW_3D 工具上下文或工具切换异常时，算子保留雕刻模式并警告用户需从视口工具栏选择；这避免把工具切换失败报告成完整成功。活动网格无法切换模式时会取消。
+- **测试：** smoke 新增属性注册/注销断言，并在独立网格上调用算子检查进入 SCULPT 模式。提交：Scene 属性 `05a2e6cd2db9e9e718c8d4911a9d1c0536e03c66`、算子 `95d1fa223fb1c39893a95629befe989a9048033a`、UI `85caa8a3d72393f98c11ba36ee9a22fe6e0bd8f8`、测试 `3748e17b493387cb2d605866cca60360d9caf844`、注销清理 `ab928b952e5d65cd30aec5b29662de87bee23d0b`。
+- **限制：** 这是原生雕刻模式的工作流入口，不是自研物理泥塑模拟器。实际工具资产加载、笔刷半径/强度绑定、撤销、多分辨率、拓扑密度和雕刻结果必须在目标 GUI/runtime 验证；当前无对应 CI/runtime 通过记录。
