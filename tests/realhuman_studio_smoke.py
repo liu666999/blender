@@ -231,6 +231,36 @@ def run():
            and abs(proportion_keys["RH体型 | 肩宽"].value - 0.80) < 1e-6
            and abs(proportion_keys["RH体型 | 腰围"].value - (-0.25)) < 1e-6,
            "Athletic silhouette preset values were not applied.")
+
+    # Character-wide presets should update only matching keys on classified
+    # meshes, while leaving unrelated user-authored keys untouched.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(6.0, 0.0, 1.0))
+    second_profile_mesh = bpy.context.object
+    second_profile_mesh.name = "RH CI Secondary Anatomy Mesh"
+    second_profile_mesh.shape_key_add(name="Basis", from_mix=False)
+    for key_name in proportion_names:
+        second_profile_mesh.shape_key_add(name=key_name, from_mix=False)
+    second_profile_custom = second_profile_mesh.shape_key_add(name="User Custom", from_mix=False)
+    second_profile_custom.value = 0.33
+    base_body_collection = rh_operators.category_collection(
+        bpy.context.scene, "BASE_BODY", create=True)
+    ensure(base_body_collection is not None, "Could not create base-body category for unified preset test.")
+    if proportion_mesh.name not in base_body_collection.objects:
+        base_body_collection.objects.link(proportion_mesh)
+    if second_profile_mesh.name not in base_body_collection.objects:
+        base_body_collection.objects.link(second_profile_mesh)
+    activate(proportion_mesh)
+    result = bpy.ops.rh_studio.apply_body_silhouette_preset(
+        preset="FEMALE", scope="CHARACTER")
+    ensure("FINISHED" in result, "Character-wide female silhouette preset failed.")
+    for mesh in (proportion_mesh, second_profile_mesh):
+        mesh_keys = mesh.data.shape_keys.key_blocks
+        ensure(abs(mesh_keys["RH体型 | 肩宽"].value - (-0.15)) < 1e-6
+               and abs(mesh_keys["RH体型 | 臀宽"].value - 0.55) < 1e-6,
+               "Character-wide preset did not update a classified mesh.")
+    ensure(abs(second_profile_custom.value - 0.33) < 1e-6,
+           "Character-wide preset changed an unrelated user shape key.")
+    bpy.data.objects.remove(second_profile_mesh, do_unlink=True)
     bpy.data.objects.remove(proportion_mesh, do_unlink=True)
 
     # Create only missing height-band masks on a subdivided mesh, and preserve
