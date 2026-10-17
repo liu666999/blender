@@ -2453,6 +2453,14 @@ class RH_OT_apply_body_silhouette_preset(bpy.types.Operator):
         ),
         default="MALE",
     )
+    scope: EnumProperty(
+        name="应用范围",
+        items=(
+            ("ACTIVE", "当前网格", "只调整活动网格的匹配形态键"),
+            ("CHARACTER", "角色全部图层", "遍历 RealHuman Studio 分类图层中的网格，只调整已存在的匹配形态键"),
+        ),
+        default="ACTIVE",
+    )
 
     _PRESET_VALUES = {
         "MALE": {
@@ -2487,33 +2495,57 @@ class RH_OT_apply_body_silhouette_preset(bpy.types.Operator):
                    for name in cls._PRESET_VALUES["MALE"])
 
     def execute(self, context):
-        obj = context.active_object
-        keys = obj.data.shape_keys.key_blocks
-        values = self._PRESET_VALUES[self.preset]
-        applied = []
-        missing = []
-        for key_name, requested in values.items():
-            key = keys.get(key_name)
-            if key is None:
-                missing.append(key_name)
-                continue
-            # Respect artist-customized slider limits instead of forcing a
-            # value the current model cannot represent.
-            actual = max(float(key.slider_min), min(float(key.slider_max), requested))
-            key.value = actual
-            applied.append(key_name)
+        active = context.active_object
+        if self.scope == "CHARACTER":
+            targets = [
+                item for item in _character_layer_objects(context.scene)
+                if item.type == "MESH" and item.data.shape_keys is not None
+            ]
+            # Include the active mesh when it is not yet classified, but never
+            # silently widen the operation to unrelated non-mesh objects.
+            if active and active.type == "MESH" and active.data.shape_keys and active not in targets:
+                targets.append(active)
+        else:
+            targets = [active] if active and active.type == "MESH" and active.data.shape_keys else []
 
-        if not applied:
-            self.report({"ERROR"}, "当前模型没有可识别的肩胸腰臀形态键；未修改模型。")
+        if not targets:
+            self.report({"ERROR"}, "应用范围内没有带形态键的人体网格；未修改模型。")
+            return {"CANCELLED"}
+
+        values = self._PRESET_VALUES[self.preset]
+        changed_objects = 0
+        applied_count = 0
+        missing_count = 0
+        for obj in targets:
+            keys = obj.data.shape_keys.key_blocks
+            object_applied = 0
+            for key_name, requested in values.items():
+                key = keys.get(key_name)
+                if key is None:
+                    missing_count += 1
+                    continue
+                # Respect artist-customized slider limits instead of forcing a
+                # value the current model cannot represent.
+                actual = max(float(key.slider_min), min(float(key.slider_max), requested))
+                key.value = actual
+                applied_count += 1
+                object_applied += 1
+            if object_applied:
+                changed_objects += 1
+
+        if not applied_count:
+            self.report({"ERROR"}, "范围内没有可识别的肩胸腰臀形态键；未修改模型。")
             return {"CANCELLED"}
 
         labels = {"MALE": "男性基础轮廓", "FEMALE": "女性基础轮廓",
                   "ATHLETIC": "运动型", "SLIM": "纤瘦型", "HEAVY": "厚实体型"}
-        message = "%s：已设置 %d 个现有轮廓滑块。" % (labels[self.preset], len(applied))
-        if missing:
-            message += " 跳过 %d 个不存在的控制。" % len(missing)
-        message += " 这是可继续手调的粗轮廓起点，不会生成性别专属解剖、肌肉/脂肪、面部或毛发资产。"
-        self.report({"WARNING"} if missing else {"INFO"}, message)
+        scope_label = "角色图层" if self.scope == "CHARACTER" else "当前网格"
+        message = "%s（%s）：更新 %d 个网格、%d 个现有轮廓滑块。" % (
+            labels[self.preset], scope_label, changed_objects, applied_count)
+        if missing_count:
+            message += " 跳过 %d 个不存在的控制。" % missing_count
+        message += " 只设置已有形态键，不会生成缺失的解剖、肌肉/脂肪、面部或毛发资产。"
+        self.report({"WARNING"} if missing_count else {"INFO"}, message)
         context.view_layer.update()
         return {"FINISHED"}
 
