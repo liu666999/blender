@@ -1,0 +1,1550 @@
+# SPDX-FileCopyrightText: 2026 RealHuman Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Headless API smoke tests for the RealHuman Studio add-on.
+
+Run with:
+  blender --background --factory-startup --python tests/realhuman_studio_smoke.py
+"""
+import json
+import os
+import sys
+import tempfile
+import uuid
+import traceback
+
+import bpy
+import bmesh
+from mathutils import Vector
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts", "addons_core"))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+import realhuman_studio
+from realhuman_studio import operators as rh_operators
+
+
+def ensure(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+
+def clean_scene():
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=False)
+    for collection in list(bpy.data.collections):
+        if collection.users == 0:
+            bpy.data.collections.remove(collection)
+
+
+def activate(obj):
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+
+def run():
+    expected_text = os.environ.get("RH_STUDIO_EXPECTED_BLENDER_VERSION", "").strip()
+    if expected_text:
+        expected = tuple(int(part) for part in expected_text.split("."))
+        actual = tuple(bpy.app.version[:3])
+        ensure(actual[:2] == expected[:2],
+               "Runtime version %s does not match the source branch series %s." %
+               (".".join(str(part) for part in actual),
+                ".".join(str(part) for part in expected)))
+    else:
+        ensure(tuple(bpy.app.version) >= (5, 4, 0),
+               "Smoke tests target the Blender version used by this source branch (5.4+).")
+    realhuman_studio.register()
+    ensure(hasattr(bpy.types.Scene, "rh_studio_target_height"),
+           "Scene properties did not register.")
+    ensure(hasattr(bpy.types.Scene, "rh_studio_sculpt_radius")
+           and hasattr(bpy.types.Scene, "rh_studio_sculpt_strength"),
+           "Sculpt brush settings did not register.")
+    required_anatomy_categories = {
+        "SKIN", "FAT", "BONES", "MUSCLES", "NERVES", "VESSELS",
+        "ORGANS", "HAIR", "TISSUE",
+    }
+    available_categories = {item[0] for item in realhuman_studio.CATEGORY_ITEMS}
+    ensure(required_anatomy_categories.issubset(available_categories),
+           "One or more anatomical layer categories are missing from the import selector.")
+    ensure(required_anatomy_categories.issubset(rh_operators.CATEGORY_COLLECTIONS),
+           "One or more anatomical layer categories lack a collection mapping.")
+    # Result viewer filtering and validation are pure helpers, so exercise them in background CI.
+    sample_results = [
+        {"object_name": "A", "status": "repaired"},
+        {"object_name": "B", "status": "skipped"},
+        {"object_name": "C", "status": "failed"},
+        "invalid-record",
+    ]
+    ensure([item["status"] for item in rh_operators.filter_repair_results(sample_results, "ALL")]
+           == ["repaired", "skipped", "failed"],
+           "Repair result viewer ALL filter did not exclude malformed rows.")
+    ensure([item["object_name"] for item in rh_operators.filter_repair_results(sample_results, "skipped")]
+           == ["B"],
+           "Repair result viewer status filter did not isolate skipped records.")
+    ensure(rh_operators.filter_repair_results(sample_results, "repaired")[0]["object_name"] == "A"
+           and rh_operators.filter_repair_results(sample_results, "failed")[0]["object_name"] == "C"
+           and rh_operators.filter_repair_results(sample_results, "unknown") == [],
+           "Repair result viewer repaired/failed/empty filters are incorrect.")
+    viewer_report_path = os.path.join(tempfile.gettempdir(), "rh_studio_viewer_report_test.json")
+    with open(viewer_report_path, "w", encoding="utf-8") as stream:
+        json.dump({
+            "schema": "realhuman_studio_missing_source_repair_results_v1",
+            "summary": {"total": 1, "repaired": 1, "skipped": 0, "failed": 0},
+            "results": [{"object_name": "A", "status": "repaired"}],
+        }, stream)
+    ensure(rh_operators.load_repair_results_report(viewer_report_path)["results"][0]["object_name"] == "A",
+           "Repair result viewer could not load a valid result report.")
+    invalid_viewer_report_path = os.path.join(tempfile.gettempdir(), "rh_studio_viewer_invalid_report_test.json")
+    with open(invalid_viewer_report_path, "w", encoding="utf-8") as stream:
+        json.dump({"schema": "wrong", "results": []}, stream)
+    try:
+        rh_operators.load_repair_results_report(invalid_viewer_report_path)
+    except ValueError:
+        invalid_report_rejected = True
+    else:
+        invalid_report_rejected = False
+    ensure(invalid_report_rejected, "Repair result viewer must reject an unsupported report schema.")
+    try:
+        rh_operators.load_repair_results_report(viewer_report_path + ".missing")
+    except OSError:
+        missing_report_rejected = True
+    else:
+        missing_report_rejected = False
+    ensure(missing_report_rejected, "Repair result viewer should surface missing report files cleanly.")
+    os.remove(viewer_report_path)
+    os.remove(invalid_viewer_report_path)
+
+    copy_test_path = os.path.join(tempfile.gettempdir(), "rh_studio_copy_path_test.obj")
+    ensure("FINISHED" in bpy.ops.rh_studio.copy_repair_result_path(path=copy_test_path),
+           "Copy repair result path operator did not finish.")
+    # Headless Blender can report a successful clipboard operator while the
+    # system clipboard remains unavailable. Verify dispatch here; validate the
+    # actual clipboard contents in a GUI session instead.
+
+    ensure(hasattr(bpy.ops.rh_studio, "view_missing_source_repair_results")
+           and hasattr(bpy.ops.rh_studio, "copy_repair_result_path"),
+           "Missing-source repair result viewer/copy operators did not register.")
+
+    clean_scene()
+
+    # Non-finite coordinates must be rejected before any shape-key mutation.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+    nonfinite_mesh = bpy.context.object
+    nonfinite_mesh.data.vertices[0].co.x = float("nan")
+    activate(nonfinite_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("CANCELLED" in result,
+           "Mesh with a NaN coordinate should be rejected by body-proportion generation.")
+    ensure(nonfinite_mesh.data.shape_keys is None,
+           "Non-finite geometry rejection must not create a partial Basis shape key.")
+    bpy.data.objects.remove(nonfinite_mesh, do_unlink=True)
+
+    # Invalid geometry must be rejected without leaving a partial Basis key behind.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+    flat_mesh = bpy.context.object
+    for vertex in flat_mesh.data.vertices:
+        vertex.co.z = 0.0
+    activate(flat_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("CANCELLED" in result, "Flat mesh should be rejected by body-proportion generation.")
+    ensure(flat_mesh.data.shape_keys is None,
+           "Rejected geometry must not be mutated by creating a stray Basis shape key.")
+    bpy.data.objects.remove(flat_mesh, do_unlink=True)
+
+    # Build and update non-destructive body-proportion shape keys on an upright mesh.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(4.0, 0.0, 1.0))
+    proportion_mesh = bpy.context.object
+    proportion_mesh.name = "RH CI Proportion Mesh"
+    proportion_mesh.scale = (0.35, 0.22, 1.0)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    shoulder_mask = proportion_mesh.vertex_groups.new(name="RH遮罩 | 肩宽")
+    upper_vertices = [vertex.index for vertex in proportion_mesh.data.vertices
+                      if vertex.co.z > 0.0]
+    shoulder_mask.add(upper_vertices, 1.0, "REPLACE")
+    activate(proportion_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("FINISHED" in result, "Body proportion shape-key generation failed.")
+    proportion_keys = proportion_mesh.data.shape_keys.key_blocks
+    proportion_names = ("RH体型 | 肩宽", "RH体型 | 胸围", "RH体型 | 腰围", "RH体型 | 臀宽")
+    ensure(all(proportion_keys.get(name) is not None for name in proportion_names),
+           "One or more body proportion shape keys are missing.")
+    shoulder_key = proportion_keys["RH体型 | 肩宽"]
+    ensure(abs(shoulder_key.slider_min + 1.0) < 1e-6
+           and abs(shoulder_key.slider_max - 1.0) < 1e-6,
+           "Body proportion controls should support a -1 to +1 range.")
+    ensure(any((shoulder_key.data[i].co - proportion_keys[0].data[i].co).length > 1e-5
+               for i in upper_vertices),
+           "Generated shoulder key does not deform vertices inside its authored mask.")
+    ensure(all((shoulder_key.data[i].co - proportion_keys[0].data[i].co).length < 1e-6
+               for i, vertex in enumerate(proportion_mesh.data.vertices)
+               if vertex.index not in upper_vertices),
+           "Generated shoulder key deformed vertices outside its authored mask.")
+
+    # Evaluate the negative slider direction as well as the stored positive
+    # shape-key coordinates, and verify the vertex-group mask still gates it.
+    shoulder_key.value = -1.0
+    bpy.context.view_layer.update()
+    evaluated_object = proportion_mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    evaluated_mesh = evaluated_object.to_mesh()
+    try:
+        ensure(any((evaluated_mesh.vertices[i].co - proportion_keys[0].data[i].co).length > 1e-5
+                   for i in upper_vertices),
+               "Negative shoulder slider value did not deform vertices inside the mask.")
+        ensure(all((evaluated_mesh.vertices[i].co - proportion_keys[0].data[i].co).length < 1e-6
+                   for i, vertex in enumerate(proportion_mesh.data.vertices)
+                   if vertex.index not in upper_vertices),
+               "Negative shoulder slider value deformed vertices outside its authored mask.")
+    finally:
+        evaluated_object.to_mesh_clear()
+    shoulder_key.value = 0.0
+    bpy.context.view_layer.update()
+    custom_key = proportion_mesh.shape_key_add(name="User Custom", from_mix=False)
+    custom_key.data[0].co.x += 0.125
+    custom_key.value = 0.25
+    custom_coord = custom_key.data[0].co.copy()
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("FINISHED" in result, "Updating body proportion shape keys failed.")
+    ensure(sum(1 for key in proportion_keys if key.name.startswith("RH体型 | ")) == 4,
+           "Updating body proportion keys created duplicate controls.")
+    ensure((custom_key.data[0].co - custom_coord).length < 1e-6
+           and abs(custom_key.value - 0.25) < 1e-6,
+           "Updating body proportion keys modified an unrelated user shape key.")
+
+    # Silhouette templates should only set the four known proportion controls
+    # and must not rewrite unrelated user-created shape keys.
+    result = bpy.ops.rh_studio.apply_body_silhouette_preset(preset="FEMALE")
+    ensure("FINISHED" in result, "Female silhouette preset failed.")
+    ensure(abs(proportion_keys["RH体型 | 肩宽"].value - (-0.15)) < 1e-6
+           and abs(proportion_keys["RH体型 | 胸围"].value - 0.25) < 1e-6
+           and abs(proportion_keys["RH体型 | 腰围"].value - (-0.45)) < 1e-6
+           and abs(proportion_keys["RH体型 | 臀宽"].value - 0.55) < 1e-6,
+           "Female silhouette preset did not set the expected shoulder/chest/waist/hip values.")
+    ensure(abs(custom_key.value - 0.25) < 1e-6
+           and (custom_key.data[0].co - custom_coord).length < 1e-6,
+           "Silhouette preset modified an unrelated user shape key.")
+    result = bpy.ops.rh_studio.apply_body_silhouette_preset(preset="ATHLETIC")
+    ensure("FINISHED" in result
+           and abs(proportion_keys["RH体型 | 肩宽"].value - 0.80) < 1e-6
+           and abs(proportion_keys["RH体型 | 腰围"].value - (-0.25)) < 1e-6,
+           "Athletic silhouette preset values were not applied.")
+
+    # Character-wide presets should update only matching keys on classified
+    # meshes, while leaving unrelated user-authored keys untouched.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(6.0, 0.0, 1.0))
+    second_profile_mesh = bpy.context.object
+    second_profile_mesh.name = "RH CI Secondary Anatomy Mesh"
+    second_profile_mesh.shape_key_add(name="Basis", from_mix=False)
+    for key_name in proportion_names:
+        second_profile_mesh.shape_key_add(name=key_name, from_mix=False)
+    second_profile_custom = second_profile_mesh.shape_key_add(name="User Custom", from_mix=False)
+    second_profile_custom.value = 0.33
+    base_body_collection = rh_operators.category_collection(
+        bpy.context.scene, "BASE_BODY", create=True)
+    ensure(base_body_collection is not None, "Could not create base-body category for unified preset test.")
+    if proportion_mesh.name not in base_body_collection.objects:
+        base_body_collection.objects.link(proportion_mesh)
+    if second_profile_mesh.name not in base_body_collection.objects:
+        base_body_collection.objects.link(second_profile_mesh)
+    activate(proportion_mesh)
+    result = bpy.ops.rh_studio.apply_body_silhouette_preset(
+        preset="FEMALE", scope="CHARACTER")
+    ensure("FINISHED" in result, "Character-wide female silhouette preset failed.")
+    for mesh in (proportion_mesh, second_profile_mesh):
+        mesh_keys = mesh.data.shape_keys.key_blocks
+        ensure(abs(mesh_keys["RH体型 | 肩宽"].value - (-0.15)) < 1e-6
+               and abs(mesh_keys["RH体型 | 臀宽"].value - 0.55) < 1e-6,
+               "Character-wide preset did not update a classified mesh.")
+    ensure(abs(second_profile_custom.value - 0.33) < 1e-6,
+           "Character-wide preset changed an unrelated user shape key.")
+    bpy.data.objects.remove(second_profile_mesh, do_unlink=True)
+    bpy.data.objects.remove(proportion_mesh, do_unlink=True)
+
+    # Create only missing height-band masks on a subdivided mesh, and preserve
+    # pre-existing/artist-edited weights when the operator is run again.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 3.0, 0.0))
+    mask_mesh = bpy.context.object
+    mask_mesh.name = "RH CI Mask Mesh"
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.subdivide(number_cuts=8)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    activate(mask_mesh)
+    result = bpy.ops.rh_studio.create_body_proportion_masks()
+    ensure("FINISHED" in result, "Initial body-proportion mask creation failed.")
+    mask_specs = (
+        ("肩宽", 0.79, 0.12),
+        ("胸围", 0.66, 0.11),
+        ("腰围", 0.52, 0.085),
+        ("臀宽", 0.42, 0.10),
+    )
+    mask_min_z = min(vertex.co.z for vertex in mask_mesh.data.vertices)
+    mask_height = max(vertex.co.z for vertex in mask_mesh.data.vertices) - mask_min_z
+    for label, center_ratio, half_width in mask_specs:
+        group = mask_mesh.vertex_groups.get("RH遮罩 | " + label)
+        ensure(group is not None, "Missing generated initial mask: " + label)
+        assigned = {}
+        for vertex in mask_mesh.data.vertices:
+            for membership in vertex.groups:
+                if membership.group == group.index:
+                    assigned[vertex.index] = membership.weight
+                    break
+        ensure(assigned, "Generated initial mask has no weighted vertices: " + label)
+        ensure(all(abs(weight - 1.0) < 1e-6 for weight in assigned.values()),
+               "Initial mask weights should start at 1.0: " + label)
+        ensure(all(abs((mask_mesh.data.vertices[index].co.z - mask_min_z) / mask_height - center_ratio)
+                   <= half_width + 1e-6 for index in assigned),
+               "Initial mask includes vertices outside its expected height band: " + label)
+
+    shoulder_group = mask_mesh.vertex_groups["RH遮罩 | 肩宽"]
+    edited_index = next(iter(
+        index for index in range(len(mask_mesh.data.vertices))
+        if any(membership.group == shoulder_group.index
+               for membership in mask_mesh.data.vertices[index].groups)
+    ))
+    shoulder_group.add([edited_index], 0.25, "REPLACE")
+    result = bpy.ops.rh_studio.create_body_proportion_masks()
+    ensure("FINISHED" in result, "Re-running initial mask creation failed.")
+    ensure(abs(shoulder_group.weight(edited_index) - 0.25) < 1e-6,
+           "Re-running mask creation overwrote an existing artist weight.")
+    ensure(sum(1 for group in mask_mesh.vertex_groups
+               if group.name.startswith("RH遮罩 | ")) == 4,
+           "Re-running mask creation produced duplicate region groups.")
+    bpy.data.objects.remove(mask_mesh, do_unlink=True)
+
+    # Exercise the same rig-generation operator the UI calls, but disable
+    # automatic weights so this test is deterministic and mesh-topology agnostic.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.95))
+    mesh = bpy.context.object
+    mesh.name = "RH CI Human Mesh"
+    mesh.scale = (0.28, 0.18, 1.8)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bpy.context.view_layer.update()
+    ensure(mesh.dimensions.z > 1.5, "Test mesh should be tall enough to rig.")
+    activate(mesh)
+
+    result = bpy.ops.rh_studio.generate_simple_rig(
+        auto_bind=False, hip_height_ratio=0.54, knee_height_ratio=0.29,
+        shoulder_height_ratio=0.82, shoulder_width_ratio=0.125,
+        arm_reach_ratio=0.52,
+    )
+    ensure("FINISHED" in result, "Simple rig generation operator failed.")
+    rig = bpy.context.object
+    ensure(rig and rig.type == "ARMATURE", "Rig was not made active.")
+    for name in ("root", "spine", "chest", "neck", "head",
+                 "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R",
+                 "hand.L", "hand.R", "thigh.L", "thigh.R", "shin.L", "shin.R",
+                 "foot.L", "foot.R"):
+        ensure(rig.pose.bones.get(name) is not None, "Missing bone: " + name)
+    shoulder_head = rig.data.bones["upper_arm.R"].head_local
+    hand_tail = rig.data.bones["hand.R"].tail_local
+    ensure(abs(shoulder_head.z - (0.05 + 0.82 * 1.8)) < 0.02,
+           "Custom shoulder-height ratio was not applied.")
+    ensure(abs(hand_tail.x - 0.52 * 1.8) < 0.03,
+           "Custom arm-reach ratio was not applied.")
+
+    # Exercise direct selected-bone rotation editing and optional keyframing.
+    activate(rig)
+    bpy.ops.object.mode_set(mode="POSE")
+    # Pass the target bone explicitly; Blender's bone-selection API differs
+    # between releases, while the operator must remain testable headlessly.
+    result = bpy.ops.rh_studio.adjust_active_bone(
+        bone_name="forearm.R", rotation_x=0.2, rotation_y=0.1,
+        rotation_z=-0.15, insert_keyframe=True)
+    ensure("FINISHED" in result, "Direct selected-bone rotation adjustment failed.")
+    edited_bone = rig.pose.bones["forearm.R"]
+    ensure(edited_bone.rotation_mode == "XYZ"
+           and abs(edited_bone.rotation_euler.x - 0.2) < 1e-4
+           and abs(edited_bone.rotation_euler.y - 0.1) < 1e-4
+           and abs(edited_bone.rotation_euler.z + 0.15) < 1e-4,
+           "Direct bone rotation values were not applied.")
+    ensure(rig.animation_data is not None and rig.animation_data.action is not None,
+           "Selected-bone keyframe was not recorded.")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    ensure("FINISHED" in bpy.ops.rh_studio.apply_pose_preset(preset="ARMS_UP"),
+           "Apply pose preset failed.")
+    existing_action = rig.animation_data.action
+    existing_action.name = "Preserve Existing Action"
+    bpy.context.scene.frame_set(1)
+    rig.pose.bones["forearm.R"].scale = (1.0, 1.0, 1.0)
+    ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
+           "Keyframe insertion failed.")
+    ensure(rig.animation_data is not None, "Pose action was not created.")
+    ensure(rig.animation_data.action == existing_action
+           and existing_action.name == "Preserve Existing Action",
+           "Inserting pose keys renamed or replaced an existing Action.")
+
+    # Give the clip a real span and animate scale as well as location/rotation.
+    # Exact-frame evaluation verifies that the scale channel is actually keyed.
+    bpy.context.scene.frame_set(13)
+    rig.pose.bones["forearm.R"].scale = (1.2, 1.1, 0.9)
+    ensure("FINISHED" in bpy.ops.rh_studio.insert_pose_keyframe(),
+           "Second keyframe insertion failed.")
+    bpy.context.scene.frame_set(13)
+    bpy.context.view_layer.update()
+    scaled_bone = rig.pose.bones["forearm.R"]
+    ensure(abs(scaled_bone.scale.x - 1.2) < 1e-3
+           and abs(scaled_bone.scale.y - 1.1) < 1e-3
+           and abs(scaled_bone.scale.z - 0.9) < 1e-3,
+           "Scale values did not persist at the keyed frame.")
+    ensure("FINISHED" in bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion"),
+           "Saving a named action set failed.")
+    saved_action = bpy.data.actions.get("RH动作集 | CI Motion")
+    ensure(saved_action is not None and saved_action.use_fake_user,
+           "Named action set was not preserved in the .blend data.")
+
+    # A failed Action copy must not delete or rename an existing saved set.
+    replace_failure_action = rig.animation_data.action.copy()
+    replace_failure_action.name = "RH动作集 | CI Replace Failure"
+    replace_failure_action.use_fake_user = True
+    original_copy_helper = rh_operators._copy_action_set_action
+
+    def fail_action_set_copy(source_action):
+        raise RuntimeError("injected action-copy failure")
+
+    rh_operators._copy_action_set_action = fail_action_set_copy
+    try:
+        failed_save = bpy.ops.rh_studio.save_action_set(
+            action_set_name="CI Replace Failure")
+    finally:
+        rh_operators._copy_action_set_action = original_copy_helper
+    ensure("CANCELLED" in failed_save,
+           "Action-set copy failure should cancel the save operation.")
+    ensure(bpy.data.actions.get("RH动作集 | CI Replace Failure") == replace_failure_action
+           and replace_failure_action.name == "RH动作集 | CI Replace Failure",
+           "Failed Action-set copy deleted or renamed the existing saved set.")
+    ensure(not any(action.name.startswith("__RH_ACTION_SET_STAGING__")
+                   or action.name.startswith("__RH_ACTION_SET_BACKUP__")
+                   for action in bpy.data.actions),
+           "Failed Action-set copy left staging or backup Actions behind.")
+
+    # A malformed layered source must not replace an already saved set. This
+    # specifically protects the validation-before-replacement ordering.
+    source_slots = getattr(rig.animation_data.action, "slots", None)
+    source_slot = getattr(rig.animation_data, "action_slot", None)
+    if source_slots is not None and len(source_slots) and source_slot is not None:
+        rig.animation_data.action_slot = None
+        rejected = bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion")
+        ensure("CANCELLED" in rejected,
+               "Saving a layered Action without an active slot should be rejected.")
+        ensure(bpy.data.actions.get("RH动作集 | CI Motion") == saved_action,
+               "Rejected save removed or replaced the previously saved action set.")
+        rig.animation_data.action_slot = source_slot
+
+    rig_copy = rig.copy()
+    rig_copy.data = rig.data.copy()
+    bpy.context.scene.collection.objects.link(rig_copy)
+    rig_copy.animation_data_create()
+    rig_copy.animation_data.action = saved_action
+    ensure("FINISHED" in bpy.ops.rh_studio.save_action_set(action_set_name="CI Motion"),
+           "Saving a duplicate action-set name should safely create a numbered copy.")
+    ensure(rig_copy.animation_data.action == saved_action and saved_action.name in bpy.data.actions,
+           "Saving a duplicate action set broke an Action used by another rig.")
+    numbered_copy = bpy.data.actions.get("RH动作集 | CI Motion (2)")
+    ensure(numbered_copy is not None and numbered_copy.use_fake_user,
+           "A duplicate action-set name did not create a persistent numbered copy.")
+    ensure("FINISHED" in bpy.ops.rh_studio.load_action_set(action_set="RH动作集 | CI Motion"),
+           "Loading a named action set failed.")
+    ensure(rig.animation_data.action == saved_action,
+           "The selected named action set was not assigned to the rig.")
+    saved_slots = getattr(saved_action, "slots", None)
+    if saved_slots is not None and len(saved_slots):
+        preferred_identifier = saved_action.get("rh_studio_action_slot_identifier", "")
+        expected_slot = next(
+            (slot for slot in saved_slots
+             if preferred_identifier and slot.identifier == preferred_identifier),
+            None,
+        )
+        ensure(expected_slot is not None,
+               "The saved action-set slot identifier does not resolve to a slot in the copied Action.")
+        ensure(rig.animation_data.action_slot == expected_slot,
+               "Loading a named action set did not bind the exact preserved Action Slot.")
+    action_start = int(saved_action.frame_range[0])
+    ensure(bpy.context.scene.frame_current == action_start,
+           "Loading an action set did not move the timeline to its first keyed frame.")
+    bpy.context.scene.frame_set(13)
+    bpy.context.view_layer.update()
+    loaded_scale = rig.pose.bones["forearm.R"].scale
+    ensure(abs(loaded_scale.x - 1.2) < 1e-3
+           and abs(loaded_scale.y - 1.1) < 1e-3
+           and abs(loaded_scale.z - 0.9) < 1e-3,
+           "Loaded action-set scale channels did not evaluate at their keyed frame.")
+    # The pose-pad drawing center must keep its head and footer inside the
+    # smallest viewport accepted by invoke(); GPU rendering itself needs GUI QA.
+    small_cx, small_cy = rh_operators._simple_pose_pad_center(240, 224)
+    ensure(abs(small_cx - 120.0) < 1e-6 and abs(small_cy - 124.0) < 1e-6,
+           "Minimal pose-pad layout is outside the accepted small viewport.")
+    ensure(small_cy + 84.0 + 15.0 <= 224.0
+           and small_cy - 124.0 >= 0.0,
+           "Pose-pad head/footer would be clipped in a 240x224 viewport.")
+
+    # The minimal 2D pose pad must key scale as well as location/rotation.
+    # Use the shared helper directly because a headless test cannot validate the modal GPU overlay.
+    bpy.context.scene.frame_set(17)
+    rig.pose.bones["forearm.R"].scale = (1.3, 1.15, 0.85)
+    keyed_bones = rh_operators._insert_rig_pose_keyframes(rig, 17)
+    ensure(keyed_bones == len(rig.pose.bones),
+           "2D pose-pad keyframe helper did not process every pose bone.")
+    action_for_2d = rig.animation_data.action
+    ensure(any(curve.data_path.endswith(".scale")
+               and 'pose.bones["forearm.R"]' in curve.data_path
+               for curve in action_for_2d.fcurves),
+           "2D pose-pad keyframe helper did not create a scale animation channel.")
+
+    ensure("FINISHED" in bpy.ops.rh_studio.check_action_sequence(),
+           "Basic action sequence check failed.")
+
+    ensure("FINISHED" in bpy.ops.rh_studio.save_pose_preset(preset_name="CI Smoke"),
+           "Saving a pose preset failed.")
+    ensure("FINISHED" in bpy.ops.rh_studio.load_pose_preset(preset_name="CI Smoke"),
+           "Loading a pose preset failed.")
+    ensure("FINISHED" in bpy.ops.rh_studio.turn_body_preset(facing="THREE_QUARTER_L"),
+           "Facing preset failed.")
+    ensure("FINISHED" in bpy.ops.rh_studio.check_pose_clearance(),
+           "Clearance check failed.")
+
+    # Verify the fabric shader graph can be built under the tested Blender API.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(1.5, 0.0, 1.0))
+    garment = bpy.context.object
+    garment.name = "RH CI Garment"
+    activate(garment)
+    result = bpy.ops.rh_studio.create_fabric_print(pattern="DOTS")
+    ensure("FINISHED" in result, "Fabric print material operator failed.")
+    ensure(garment.data.materials and garment.data.materials[0].use_nodes,
+           "Fabric material wasn't assigned.")
+    dot_material = garment.data.materials[0]
+    dot_nodes = list(dot_material.node_tree.nodes)
+    ensure(any(node.bl_idname == "ShaderNodeMapRange" for node in dot_nodes)
+           and any(node.bl_idname == "ShaderNodeTexNoise" for node in dot_nodes)
+           and any(node.bl_idname == "ShaderNodeBump" for node in dot_nodes),
+           "Fabric print material must include soft dye edges and a micrograin bump.")
+    dot_links = list(dot_material.node_tree.links)
+    ensure(any(link.from_node.bl_idname == "ShaderNodeMapRange"
+               and link.to_node.bl_idname == "ShaderNodeMixRGB"
+               for link in dot_links),
+           "Soft dye-edge mask is present but not connected to the print color mix.")
+    ensure(any(link.from_node.bl_idname == "ShaderNodeBump"
+               and link.to_node.bl_idname == "ShaderNodeBsdfPrincipled"
+               and link.to_socket.name == "Normal"
+               for link in dot_links),
+           "Fabric micrograin bump is present but not connected to the shader normal.")
+    ensure(abs(dot_material.get("rh_studio_edge_bleed", -1.0) - 0.06) < 1e-6
+           and abs(dot_material.get("rh_studio_weave_strength", -1.0) - 0.25) < 1e-6,
+           "Fabric dye-edge and weave controls were not persisted in material metadata.")
+    result = bpy.ops.rh_studio.create_fabric_print(
+        pattern="DYE", density=16.0, edge_bleed=0.12, weave_strength=0.65)
+    ensure("FINISHED" in result, "Procedural fabric dye mode failed.")
+    dye_material = garment.data.materials[0]
+    ensure(dye_material.get("rh_studio_pattern") == "DYE"
+           and dye_material.get("rh_studio_material_type") == "procedural_fabric_dye"
+           and abs(dye_material.get("rh_studio_edge_bleed", 0.0) - 0.12) < 1e-6
+           and abs(dye_material.get("rh_studio_weave_strength", 0.0) - 0.65) < 1e-6,
+           "Fabric dye mode metadata is incorrect.")
+    ensure(any(node.bl_idname == "ShaderNodeTexNoise" for node in dye_material.node_tree.nodes)
+           and any(node.bl_idname == "ShaderNodeMapRange" for node in dye_material.node_tree.nodes),
+           "Dye mode should create noise variation with softened boundaries.")
+
+    # Verify object-coordinate mapping and face-region-only material assignment.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.5, 0.0, 1.0))
+    region_mesh = bpy.context.object
+    region_mesh.name = "RH CI Regional Print Mesh"
+    region_mesh.data.materials.append(bpy.data.materials.new("RH CI Base Fabric"))
+    activate(region_mesh)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bm = bmesh.from_edit_mesh(region_mesh.data)
+    for face in bm.faces:
+        face.select_set(False)
+    top_faces = [face for face in bm.faces if face.normal.z > 0.9]
+    ensure(len(top_faces) == 1, "Test cube should have exactly one top face.")
+    top_faces[0].select_set(True)
+    bmesh.update_edit_mesh(region_mesh.data)
+    result = bpy.ops.rh_studio.create_fabric_print(
+        pattern="STRIPES", coordinate_source="OBJECT",
+        offset_x=0.25, offset_y=-0.1, scale_x=1.5, scale_y=0.75)
+    ensure("FINISHED" in result, "Regional fabric print assignment failed.")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    region_material = region_mesh.data.materials[-1]
+    ensure(region_material.get("rh_studio_coordinate_source") == "OBJECT",
+           "Fabric coordinate source metadata was not stored.")
+    ensure(abs(region_material.get("rh_studio_offset_x", 0.0) - 0.25) < 1e-6
+           and abs(region_material.get("rh_studio_scale_y", 0.0) - 0.75) < 1e-6,
+           "Fabric placement controls were not stored.")
+    assigned_faces = [poly for poly in region_mesh.data.polygons
+                      if poly.material_index == len(region_mesh.data.materials) - 1]
+    ensure(len(assigned_faces) == 1 and assigned_faces[0].normal.z > 0.9,
+           "Regional print should affect only the selected face.")
+    bpy.data.objects.remove(region_mesh, do_unlink=True)
+
+    # Asset manifest export must preserve a prior report if JSON serialization fails.
+    activate(garment)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_manifest_atomic_") as manifest_tmp:
+        manifest_path = os.path.join(manifest_tmp, "asset_manifest.json")
+        preserved_manifest = "keep previous manifest exactly\\n"
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            stream.write(preserved_manifest)
+        original_dump = rh_operators.json.dump
+
+        def fail_manifest_dump(payload, stream, **kwargs):
+            if isinstance(payload, dict) and payload.get("schema") == "realhuman_studio_asset_manifest_v1":
+                raise ValueError("injected asset-manifest serialization failure")
+            return original_dump(payload, stream, **kwargs)
+
+        rh_operators.json.dump = fail_manifest_dump
+        try:
+            failed_export = bpy.ops.rh_studio.export_asset_manifest(filepath=manifest_path)
+        finally:
+            rh_operators.json.dump = original_dump
+        ensure("CANCELLED" in failed_export,
+               "Asset manifest export should report serialization failure.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            ensure(stream.read() == preserved_manifest,
+                   "Failed asset manifest serialization overwrote the previous report.")
+        ensure(not any(name.startswith("asset_manifest.json.tmp-")
+                       for name in os.listdir(manifest_tmp)),
+               "Failed asset manifest export left a temporary file behind.")
+
+        successful_export = bpy.ops.rh_studio.export_asset_manifest(filepath=manifest_path)
+        ensure("FINISHED" in successful_export and os.path.isfile(manifest_path),
+               "Asset manifest export did not succeed after restoring JSON serialization.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest_payload = json.load(stream)
+        ensure(manifest_payload.get("schema") == "realhuman_studio_asset_manifest_v1",
+               "Successful asset manifest export wrote the wrong schema.")
+        ensure(not any(name.startswith("asset_manifest.json.tmp-")
+                       for name in os.listdir(manifest_tmp)),
+               "Successful asset manifest export left a temporary file behind.")
+
+    # Selected asset audit should create a portable JSON report with real mesh statistics.
+    activate(garment)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_asset_audit_") as audit_tmp:
+        audit_path = os.path.join(audit_tmp, "asset_audit.json")
+        result = bpy.ops.rh_studio.audit_selected_assets(filepath=audit_path)
+        ensure("FINISHED" in result and os.path.isfile(audit_path),
+               "Selected asset audit did not write its JSON report.")
+        with open(audit_path, "r", encoding="utf-8") as stream:
+            audit_payload = json.load(stream)
+        ensure(audit_payload.get("schema") == "realhuman_studio_asset_audit_v1"
+               and audit_payload.get("object_count") == 1,
+               "Asset audit report schema or object count is incorrect.")
+        audited = audit_payload["objects"][0]
+        ensure(audited.get("name") == garment.name
+               and audited.get("mesh", {}).get("vertices") == len(garment.data.vertices)
+               and audited.get("mesh", {}).get("polygons") == len(garment.data.polygons),
+               "Asset audit did not report accurate mesh statistics.")
+        ensure("uv_layers" in audited["mesh"]
+               and "non_manifold_edges" in audited["mesh"],
+               "Asset audit omitted UV or topology diagnostics.")
+
+    # Asset audit should flag a missing original source and a broken armature modifier.
+    bpy.ops.mesh.primitive_cube_add(size=1.0)
+    broken_asset = bpy.context.object
+    broken_asset.name = "RH CI Broken Asset Links"
+    broken_asset["rh_studio_source_path"] = os.path.join(
+        tempfile.gettempdir(), "rh_studio_source_that_does_not_exist.fbx")
+    broken_asset["rh_studio_import_batch_id"] = "ci-broken-link-batch"
+    broken_asset.modifiers.new(name="Missing Rig Target", type="ARMATURE")
+    activate(broken_asset)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_broken_asset_audit_") as audit_tmp:
+        broken_audit_path = os.path.join(audit_tmp, "broken_asset_audit.json")
+        result = bpy.ops.rh_studio.audit_selected_assets(filepath=broken_audit_path)
+        ensure("FINISHED" in result, "Broken asset link audit failed.")
+        with open(broken_audit_path, "r", encoding="utf-8") as stream:
+            broken_payload = json.load(stream)
+        broken_record = broken_payload["objects"][0]
+        ensure(broken_record.get("source_path_exists") is False
+               and broken_record.get("import_batch_id") == "ci-broken-link-batch"
+               and any("原始资源文件不存在" in warning
+                       for warning in broken_record.get("warnings", []))
+               and any("没有目标骨架" in warning
+                       for warning in broken_record.get("warnings", [])),
+               "Asset audit missed a stale source path or an unassigned armature modifier.")
+
+        # The project-wide report should aggregate all objects and cross-check
+        # the persistent import history, not only inspect the current selection.
+        previous_project_root = bpy.context.scene.rh_studio_project_root
+        bpy.context.scene.rh_studio_project_root = audit_tmp
+        with open(os.path.join(audit_tmp, "realhuman_project.json"), "w",
+                  encoding="utf-8") as stream:
+            json.dump({
+                "application": "RealHuman Studio",
+                "asset_sources": [{
+                    "batch_id": "ci-missing-source-history",
+                    "source_path": os.path.join(audit_tmp, "deleted_original.fbx"),
+                    "objects": [{"name": "RH CI Deleted Imported Object"}],
+                }],
+            }, stream)
+        project_audit_path = os.path.join(audit_tmp, "project_integrity.json")
+        result = bpy.ops.rh_studio.audit_project_assets(filepath=project_audit_path)
+        ensure("FINISHED" in result and os.path.isfile(project_audit_path),
+               "Project-wide asset audit failed.")
+        with open(project_audit_path, "r", encoding="utf-8") as stream:
+            project_audit = json.load(stream)
+        ensure(project_audit.get("schema") == "realhuman_studio_project_integrity_v1"
+               and project_audit.get("summary", {}).get("missing_source_files", 0) >= 1
+               and project_audit.get("summary", {}).get("missing_armature_targets", 0) >= 1
+               and any("源文件不存在" in warning
+                       for warning in project_audit.get("project_history", {}).get("warnings", []))
+               and project_audit.get("object_count", 0) >= 1,
+               "Project audit missed broken links or project history inconsistencies.")
+        # Candidate scan is preview-only and ranks exact filename/extension candidates by recorded size.
+        scan_root = os.path.join(audit_tmp, "source_recovery")
+        os.makedirs(scan_root, exist_ok=True)
+        scan_candidate = os.path.join(scan_root, "lost_asset.fbx")
+        with open(scan_candidate, "wb") as stream:
+            stream.write(b"known-size-original")
+        scan_manifest_path = os.path.join(audit_tmp, "realhuman_project.json")
+        with open(scan_manifest_path, "r", encoding="utf-8") as stream:
+            scan_manifest = json.load(stream)
+        scan_manifest["asset_sources"].append({
+            "batch_id": "ci-scan-batch",
+            "source_path": os.path.join(audit_tmp, "gone", "lost_asset.fbx"),
+            "source_size_bytes": os.path.getsize(scan_candidate),
+            "objects": [{"name": "RH CI Scan Asset", "type": "MESH"}],
+        })
+        with open(scan_manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(scan_manifest, stream, ensure_ascii=False, indent=2)
+        bpy.ops.mesh.primitive_cube_add(size=1.0)
+        scan_asset = bpy.context.object
+        scan_asset.name = "RH CI Scan Asset"
+        old_scan_path = os.path.join(audit_tmp, "gone", "lost_asset.fbx")
+        scan_asset["rh_studio_source_path"] = old_scan_path
+        scan_asset["rh_studio_import_batch_id"] = "ci-scan-batch"
+        activate(scan_asset)
+        scan_report_path = os.path.join(audit_tmp, "missing_source_candidates.json")
+        result = bpy.ops.rh_studio.scan_missing_sources(directory=scan_root, filepath=scan_report_path)
+        ensure("FINISHED" in result and os.path.isfile(scan_report_path),
+               "Missing-source candidate scan did not write its report.")
+        with open(scan_report_path, "r", encoding="utf-8") as stream:
+            scan_report = json.load(stream)
+        scan_records = [item for item in scan_report["objects"] if item["object_name"] == scan_asset.name]
+        ensure(len(scan_records) == 1
+               and scan_records[0]["candidate_status"] == "unique_exact_size_match"
+               and scan_records[0]["candidates"][0]["path"] == os.path.normpath(scan_candidate)
+               and scan_records[0]["candidates"][0]["size_match"],
+               "Candidate scan failed to find the unique same-name, same-extension, same-size candidate.")
+        ensure(scan_asset["rh_studio_source_path"] == old_scan_path,
+               "Candidate scan must not mutate source-path metadata.")
+
+        # A candidate changing after the scan must be rejected without mutation.
+        with open(scan_candidate, "ab") as stream:
+            stream.write(b"-changed")
+        with open(scan_manifest_path, "rb") as stream:
+            before_manifest_bytes = stream.read()
+        try:
+            result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=scan_report_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        with open(scan_manifest_path, "rb") as stream:
+            after_manifest_bytes = stream.read()
+        ensure("CANCELLED" in result
+               and scan_asset["rh_studio_source_path"] == old_scan_path
+               and after_manifest_bytes == before_manifest_bytes,
+               "Batch repair must reject a candidate whose size changed after scanning without mutating data.")
+        repair_results_path = os.path.join(audit_tmp, "logs", "missing_source_repair_results.json")
+        ensure(os.path.isfile(repair_results_path),
+               "Rejected batch repair should still write a per-item result report.")
+        with open(repair_results_path, "r", encoding="utf-8") as stream:
+            changed_candidate_results = json.load(stream)
+        changed_result = next((item for item in changed_candidate_results.get("results", [])
+                               if item.get("object_name") == scan_asset.name), {})
+        ensure(changed_candidate_results.get("schema") == "realhuman_studio_missing_source_repair_results_v1"
+               and changed_result.get("status") == "skipped"
+               and changed_result.get("reason") == "candidate_size_changed_or_mismatched",
+               "Repair results should explain why the changed candidate was skipped.")
+        with open(scan_candidate, "wb") as stream:
+            stream.write(b"known-size-original")
+        result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=scan_report_path)
+        ensure("FINISHED" in result
+               and os.path.normpath(scan_asset["rh_studio_source_path"]) == os.path.normpath(scan_candidate)
+               and scan_asset.get("rh_studio_relinked_at"),
+               "Confirmed batch repair did not relink the unique exact-size candidate.")
+        with open(scan_manifest_path, "r", encoding="utf-8") as stream:
+            repaired_manifest = json.load(stream)
+        repaired_entries = [entry for entry in repaired_manifest["asset_sources"]
+                            if entry.get("batch_id") == "ci-scan-batch"]
+        ensure(len(repaired_entries) == 1
+               and os.path.normpath(repaired_entries[0]["source_path"]) == os.path.normpath(scan_candidate)
+               and repaired_entries[0].get("recovery_method") == "candidate_report_unique_exact_size",
+               "Batch repair did not synchronize project import history.")
+        with open(repair_results_path, "r", encoding="utf-8") as stream:
+            successful_repair_results = json.load(stream)
+        successful_result = next((item for item in successful_repair_results.get("results", [])
+                                  if item.get("object_name") == scan_asset.name), {})
+        ensure(successful_result.get("status") == "repaired"
+               and successful_result.get("reason") == "unique_exact_size_and_project_history_verified"
+               and successful_repair_results.get("summary", {}).get("repaired") == 1,
+               "Successful repair results should record the repaired object and summary.")
+        # An ambiguous candidate report must not change object metadata or history.
+        ambiguous_report_path = os.path.join(audit_tmp, "ambiguous_candidates.json")
+        with open(scan_report_path, "r", encoding="utf-8") as stream:
+            ambiguous_payload = json.load(stream)
+        for item in ambiguous_payload["objects"]:
+            if item.get("object_name") == scan_asset.name:
+                item["candidate_status"] = "ambiguous_exact_size_matches"
+        with open(ambiguous_report_path, "w", encoding="utf-8") as stream:
+            json.dump(ambiguous_payload, stream, ensure_ascii=False, indent=2)
+        repaired_source_path = scan_asset["rh_studio_source_path"]
+        with open(scan_manifest_path, "rb") as stream:
+            before_ambiguous_manifest = stream.read()
+        try:
+            result = bpy.ops.rh_studio.apply_missing_source_repairs(filepath=ambiguous_report_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        with open(scan_manifest_path, "rb") as stream:
+            after_ambiguous_manifest = stream.read()
+        ensure("CANCELLED" in result
+               and scan_asset["rh_studio_source_path"] == repaired_source_path
+               and after_ambiguous_manifest == before_ambiguous_manifest,
+               "Ambiguous candidate records must be refused without mutating object or history.")
+        with open(repair_results_path, "r", encoding="utf-8") as stream:
+            ambiguous_repair_results = json.load(stream)
+        ambiguous_result = next((item for item in ambiguous_repair_results.get("results", [])
+                                 if item.get("object_name") == scan_asset.name), {})
+        ensure(ambiguous_result.get("status") == "skipped"
+               and ambiguous_result.get("reason") == "candidate_status_not_repairable"
+               and ambiguous_repair_results.get("summary", {}).get("skipped", 0) >= 1,
+               "Ambiguous repair report should record a skipped result with an explicit reason.")
+        bpy.data.objects.remove(scan_asset, do_unlink=True)
+
+        # Relinking repairs metadata only; it must also update the matching history batch atomically.
+        relink_source = os.path.join(audit_tmp, "recovered_original.fbx")
+        with open(relink_source, "wb") as stream:
+            stream.write(b"recovered source file")
+        project_manifest_path = os.path.join(audit_tmp, "realhuman_project.json")
+        with open(project_manifest_path, "r", encoding="utf-8") as stream:
+            relink_manifest = json.load(stream)
+        relink_manifest["asset_sources"].append({
+            "batch_id": "ci-broken-link-batch",
+            "source_path": broken_asset["rh_studio_source_path"],
+            "source_size_bytes": 10,
+            "objects": [{"name": broken_asset.name, "type": "MESH"}],
+        })
+        with open(project_manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(relink_manifest, stream, ensure_ascii=False, indent=2)
+        broken_asset["rh_studio_import_batch_id"] = "ci-broken-link-batch"
+        activate(broken_asset)
+        result = bpy.ops.rh_studio.relink_asset_source(filepath=relink_source)
+        ensure("FINISHED" in result, "Source-path relink operator failed.")
+        ensure(os.path.normpath(broken_asset["rh_studio_source_path"]) == os.path.normpath(relink_source)
+               and os.path.isfile(broken_asset["rh_studio_source_path"])
+               and broken_asset.get("rh_studio_relinked_at"),
+               "Relink did not update the selected object's source metadata.")
+        with open(project_manifest_path, "r", encoding="utf-8") as stream:
+            relinked_manifest = json.load(stream)
+        matching_batch = [entry for entry in relinked_manifest["asset_sources"]
+                          if entry.get("batch_id") == "ci-broken-link-batch"]
+        ensure(len(matching_batch) == 1
+               and matching_batch[0].get("source_path") == os.path.normpath(relink_source)
+               and matching_batch[0].get("source_size_bytes") == os.path.getsize(relink_source)
+               and matching_batch[0].get("relinked_from")
+               and matching_batch[0].get("relinked_at"),
+               "Relink did not synchronize the import-history source metadata.")
+        # Mixed batches must be rejected before any object's path is mutated.
+        bpy.ops.mesh.primitive_cube_add(size=1.0)
+        second_asset = bpy.context.object
+        second_asset.name = "RH CI Other Batch Asset"
+        second_asset["rh_studio_source_path"] = broken_asset["rh_studio_source_path"]
+        second_asset["rh_studio_import_batch_id"] = "different-batch"
+        activate(broken_asset)
+        second_asset.select_set(True)
+        try:
+            result = bpy.ops.rh_studio.relink_asset_source(filepath=relink_source)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result
+               and broken_asset["rh_studio_source_path"] == os.path.normpath(relink_source),
+               "Relink should reject mixed batches without mutating source paths.")
+        bpy.data.objects.remove(second_asset, do_unlink=True)
+        bpy.context.scene.rh_studio_project_root = previous_project_root
+    bpy.data.objects.remove(broken_asset, do_unlink=True)
+
+    # Asset manifest export should include portable metadata and convert dimensions to meters.
+    activate(garment)
+    previous_manifest_scale = bpy.context.scene.unit_settings.scale_length
+    bpy.context.scene.unit_settings.scale_length = 0.01
+    with tempfile.TemporaryDirectory(prefix="rh_studio_asset_manifest_") as manifest_tmp:
+        manifest_path = os.path.join(manifest_tmp, "asset_manifest.json")
+        result = bpy.ops.rh_studio.export_asset_manifest(filepath=manifest_path)
+        ensure("FINISHED" in result and os.path.isfile(manifest_path),
+               "Asset manifest export did not write its JSON file.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest_payload = json.load(stream)
+        ensure(manifest_payload.get("schema") == "realhuman_studio_asset_manifest_v1"
+               and manifest_payload.get("object_count") == 1
+               and abs(manifest_payload.get("meters_per_blender_unit", 0.0) - 0.01) < 1e-9,
+               "Asset manifest schema, count, or unit scale is incorrect.")
+        manifest_object = manifest_payload["objects"][0]
+        ensure(manifest_object.get("name") == garment.name
+               and manifest_object.get("mesh", {}).get("vertices") == len(garment.data.vertices)
+               and manifest_object.get("world_bounds") is not None
+               and len(manifest_object.get("dimensions_world_m", [])) == 3,
+               "Asset manifest omitted mesh statistics or metric world bounds.")
+    bpy.context.scene.unit_settings.scale_length = previous_manifest_scale
+
+    # Scale diagnosis should report world dimensions and unit hypotheses without mutating transforms.
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(1.0, 2.0, 3.0))
+    scale_cube = bpy.context.object
+    scale_location_before = tuple(scale_cube.location)
+    scale_scale_before = tuple(scale_cube.scale)
+    activate(scale_cube)
+    with tempfile.TemporaryDirectory(prefix="rh_studio_scale_diagnosis_") as scale_tmp:
+        scale_report_path = os.path.join(scale_tmp, "scale_diagnosis.json")
+        result = bpy.ops.rh_studio.diagnose_asset_scale(filepath=scale_report_path)
+        ensure("FINISHED" in result and os.path.isfile(scale_report_path),
+               "Scale diagnosis did not write its JSON report.")
+        with open(scale_report_path, "r", encoding="utf-8") as stream:
+            scale_payload = json.load(stream)
+        ensure(scale_payload.get("schema") == "realhuman_studio_scale_diagnosis_v1"
+               and scale_payload.get("object_count") == 1,
+               "Scale diagnosis report schema or object count is incorrect.")
+        ensure(scale_payload["world_bounds"]["dimensions"] == [2.0, 2.0, 2.0]
+               and len(scale_payload["unit_hypotheses"]) == 3,
+               "Scale diagnosis returned incorrect bounds or missing unit hypotheses.")
+        ensure(tuple(scale_cube.location) == scale_location_before
+               and tuple(scale_cube.scale) == scale_scale_before,
+               "Scale diagnosis unexpectedly modified object transforms.")
+    bpy.data.objects.remove(scale_cube, do_unlink=True)
+
+    # Height calibration converts the meter target through scene scale_length.
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(1.0, 2.0, 3.0))
+    calibration_cube = bpy.context.object
+    activate(calibration_cube)
+    previous_unit_system = bpy.context.scene.unit_settings.system
+    previous_scale_length = bpy.context.scene.unit_settings.scale_length
+    bpy.context.scene.unit_settings.system = "METRIC"
+    bpy.context.scene.unit_settings.scale_length = 0.01
+    result = bpy.ops.rh_studio.fit_height(target_height=1.75)
+    ensure("FINISHED" in result, "Height calibration failed for a centimeter-scaled scene.")
+    bpy.context.view_layer.update()
+    calibrated_height_m = float(calibration_cube.dimensions.z) * bpy.context.scene.unit_settings.scale_length
+    calibrated_bottom_z = min((calibration_cube.matrix_world @ Vector(corner)).z
+                              for corner in calibration_cube.bound_box) * bpy.context.scene.unit_settings.scale_length
+    ensure(abs(calibrated_height_m - 1.75) < 1e-4,
+           "Height calibration did not honor scene scale_length.")
+    ensure(abs(calibrated_bottom_z) < 1e-4,
+           "Height calibration did not place the mesh bottom at world Z=0.")
+    bpy.data.objects.remove(calibration_cube, do_unlink=True)
+    bpy.context.scene.unit_settings.system = previous_unit_system
+    bpy.context.scene.unit_settings.scale_length = previous_scale_length
+
+    # Group calibration scales multiple selected objects together in world space.
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0.0, 0.0, 0.0))
+    group_body = bpy.context.object
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0.0, 0.0, 3.0))
+    group_clothing = bpy.context.object
+    group_body.select_set(True)
+    group_clothing.select_set(True)
+    bpy.context.view_layer.objects.active = group_body
+    previous_unit_system = bpy.context.scene.unit_settings.system
+    previous_scale_length = bpy.context.scene.unit_settings.scale_length
+    bpy.context.scene.unit_settings.system = "METRIC"
+    bpy.context.scene.unit_settings.scale_length = 0.01
+    result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
+    ensure("FINISHED" in result, "Selected-group height calibration failed.")
+    bpy.context.view_layer.update()
+    group_corners = [
+        obj.matrix_world @ Vector(corner)
+        for obj in (group_body, group_clothing) for corner in obj.bound_box
+    ]
+    group_height_m = (max(p.z for p in group_corners) - min(p.z for p in group_corners)) * 0.01
+    group_bottom_m = min(p.z for p in group_corners) * 0.01
+    ensure(abs(group_height_m - 1.75) < 1e-4,
+           "Selected-group calibration did not achieve target height.")
+    ensure(abs(group_bottom_m) < 1e-4,
+           "Selected-group calibration did not place group bottom at world Z=0.")
+    ensure(group_body.dimensions.z > 0.0 and group_clothing.dimensions.z > 0.0,
+           "Selected-group calibration damaged object dimensions.")
+    bpy.data.objects.remove(group_body, do_unlink=True)
+    bpy.data.objects.remove(group_clothing, do_unlink=True)
+    bpy.context.scene.unit_settings.system = previous_unit_system
+    bpy.context.scene.unit_settings.scale_length = previous_scale_length
+
+    # Refuse to scale a bound mesh without its armature, and preserve transforms.
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.object.armature_add(location=(0.0, 0.0, 0.0))
+    bound_rig = bpy.context.object
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(2.0, 0.0, 1.0))
+    bound_mesh = bpy.context.object
+    armature_modifier = bound_mesh.modifiers.new(name="Armature", type="ARMATURE")
+    armature_modifier.object = bound_rig
+    mesh_matrix_before = bound_mesh.matrix_world.copy()
+    rig_matrix_before = bound_rig.matrix_world.copy()
+    activate(bound_mesh)
+    # Blender's background operator runner raises RuntimeError when an operator
+    # reports ERROR, even when the operator correctly returns CANCELLED.
+    try:
+        result = bpy.ops.rh_studio.fit_selected_group_height(target_height=1.75)
+    except RuntimeError as exc:
+        ensure("未选中的绑定骨架" in str(exc),
+               "Group calibration failed for an unexpected reason: %s" % exc)
+        result = {"CANCELLED"}
+    ensure("CANCELLED" in result,
+           "Group calibration should refuse a bound mesh when its armature is not selected.")
+    ensure(all(abs(a - b) < 1e-6
+                   for row_a, row_b in zip(mesh_matrix_before, bound_mesh.matrix_world)
+                   for a, b in zip(row_a, row_b))
+           and all(abs(a - b) < 1e-6
+                   for row_a, row_b in zip(rig_matrix_before, bound_rig.matrix_world)
+                   for a, b in zip(row_a, row_b)),
+           "Rejected group calibration unexpectedly modified transforms.")
+    bpy.data.objects.remove(bound_mesh, do_unlink=True)
+    bpy.data.objects.remove(bound_rig, do_unlink=True)
+
+    # Position normalization should center the selected group and place its bounds on Z=0
+    # without applying transforms or mutating mesh coordinates.
+    bpy.ops.mesh.primitive_cube_add(size=2.0, location=(3.0, 4.0, 2.0))
+    normalize_cube = bpy.context.object
+    mesh_coords_before = [tuple(vertex.co) for vertex in normalize_cube.data.vertices]
+    scale_before = tuple(normalize_cube.scale)
+    activate(normalize_cube)
+    result = bpy.ops.rh_studio.normalize_selected_assets()
+    ensure("FINISHED" in result, "Asset position normalization operator failed.")
+    bpy.context.view_layer.update()
+    world_corners = [normalize_cube.matrix_world @ Vector(corner)
+                     for corner in normalize_cube.bound_box]
+    bounds_min = [min(point[i] for point in world_corners) for i in range(3)]
+    bounds_max = [max(point[i] for point in world_corners) for i in range(3)]
+    ensure(abs((bounds_min[0] + bounds_max[0]) * 0.5) < 1e-5
+           and abs((bounds_min[1] + bounds_max[1]) * 0.5) < 1e-5
+           and abs(bounds_min[2]) < 1e-5,
+           "Asset normalization did not center X/Y and align the bottom to Z=0.")
+    ensure(tuple(normalize_cube.scale) == scale_before
+           and [tuple(vertex.co) for vertex in normalize_cube.data.vertices] == mesh_coords_before,
+           "Asset normalization unexpectedly changed scale or mesh coordinates.")
+    ensure(normalize_cube.get("rh_studio_position_normalized") is True,
+           "Asset normalization metadata was not recorded.")
+    bpy.data.objects.remove(normalize_cube, do_unlink=True)
+
+    # Validate the project folder scaffolding and manifest in a temporary folder.
+    with tempfile.TemporaryDirectory(prefix="rh_studio_ci_") as tmp:
+        result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
+        ensure("FINISHED" in result, "Project setup operator failed.")
+        manifest_path = os.path.join(tmp, "SmokeTest", "realhuman_project.json")
+        ensure(os.path.isfile(manifest_path), "Project manifest was not created.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        ensure(manifest.get("application") == "RealHuman Studio",
+               "Project manifest content is unexpected.")
+        # Reopening project setup must preserve import history and custom fields.
+        manifest["custom_metadata"] = {"keep": True}
+        manifest["asset_sources"].append({"batch_id": "preserve-me"})
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(manifest, stream, ensure_ascii=False, indent=2)
+        result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
+        ensure("FINISHED" in result, "Reusing an existing valid project should succeed.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            preserved_manifest = json.load(stream)
+        ensure(preserved_manifest.get("custom_metadata") == {"keep": True}
+               and preserved_manifest.get("asset_sources") == [{"batch_id": "preserve-me"}],
+               "Project setup overwrote existing metadata or import history.")
+
+        # A malformed existing manifest must be rejected and left byte-for-byte intact.
+        malformed_manifest = "{not valid json\n"
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            stream.write(malformed_manifest)
+        result = bpy.ops.rh_studio.setup_project(project_name="SmokeTest", project_root=tmp)
+        ensure("CANCELLED" in result, "Project setup should reject a malformed existing manifest.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            ensure(stream.read() == malformed_manifest,
+                   "Project setup modified a malformed manifest while rejecting it.")
+        # Restore a valid empty-history manifest for the existing import-history test below.
+        preserved_manifest["asset_sources"] = []
+        with open(manifest_path, "w", encoding="utf-8") as stream:
+            json.dump(preserved_manifest, stream, ensure_ascii=False, indent=2)
+
+        # If an importer creates an object and then fails, the operator must
+        # remove the partial object instead of leaving a broken scene residue.
+        rollback_source_path = os.path.join(tmp, "partial_import.fbx")
+        with open(rollback_source_path, "wb") as stream:
+            stream.write(b"fault-injected importer fixture")
+        objects_before_failed_import = {obj.as_pointer() for obj in bpy.data.objects}
+        meshes_before_failed_import = {mesh.as_pointer() for mesh in bpy.data.meshes}
+        original_import_call = rh_operators._call_import_operator
+        def create_then_fail_import(filepath):
+            mesh_data = bpy.data.meshes.new("RH_partial_import_mesh")
+            partial = bpy.data.objects.new("RH_partial_import_object", mesh_data)
+            bpy.context.scene.collection.objects.link(partial)
+            raise RuntimeError("injected importer failure")
+        rh_operators._call_import_operator = create_then_fail_import
+        try:
+            try:
+                failed_import_result = bpy.ops.rh_studio.import_asset(
+                    filepath=rollback_source_path, category="BASE_BODY")
+            except RuntimeError:
+                failed_import_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+        ensure("CANCELLED" in failed_import_result,
+               "Fault-injected asset import should return CANCELLED.")
+        ensure({obj.as_pointer() for obj in bpy.data.objects} == objects_before_failed_import,
+               "Failed asset import left newly created objects in the scene.")
+        ensure({mesh.as_pointer() for mesh in bpy.data.meshes} == meshes_before_failed_import,
+               "Failed asset import left an orphan mesh datablock.")
+
+        # If an importer reports FINISHED but creates no object, any new
+        # material/image datablocks must still be rolled back.
+        empty_import_source = os.path.join(tmp, "empty_import_asset.fbx")
+        with open(empty_import_source, "wb") as stream:
+            stream.write(b"empty import fixture")
+        materials_before_empty_import = {
+            material.as_pointer() for material in bpy.data.materials
+        }
+        original_import_call = rh_operators._call_import_operator
+        def create_material_without_object(filepath):
+            bpy.data.materials.new("RH_empty_import_orphan_material")
+            return {"FINISHED"}
+        rh_operators._call_import_operator = create_material_without_object
+        try:
+            try:
+                empty_import_result = bpy.ops.rh_studio.import_asset(
+                    filepath=empty_import_source, category="BASE_BODY")
+            except RuntimeError:
+                empty_import_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+        ensure("CANCELLED" in empty_import_result,
+               "An import producing no objects should be cancelled.")
+        ensure({material.as_pointer() for material in bpy.data.materials}
+               == materials_before_empty_import,
+               "An object-less failed import leaked a material datablock.")
+
+        # A failure after category setup must also remove transaction-created
+        # collections, not only the imported object and its mesh datablock.
+        category_rollback_source = os.path.join(tmp, "category_rollback_asset.fbx")
+        with open(category_rollback_source, "wb") as stream:
+            stream.write(b"category rollback fixture")
+        collections_before_category_failure = {
+            collection.as_pointer() for collection in bpy.data.collections
+        }
+        objects_before_category_failure = {
+            obj.as_pointer() for obj in bpy.data.objects
+        }
+        original_import_call = rh_operators._call_import_operator
+        original_move_category = rh_operators.move_objects_to_category
+        def create_asset_for_category_failure(filepath):
+            mesh_data = bpy.data.meshes.new("RH_category_failure_mesh")
+            imported_object = bpy.data.objects.new("RH_category_failure_object", mesh_data)
+            bpy.context.scene.collection.objects.link(imported_object)
+            return {"FINISHED"}
+        def create_category_then_fail(objects, scene, category, source_path=""):
+            root = bpy.data.collections.get(rh_operators.ROOT_COLLECTION)
+            temporary_collection = bpy.data.collections.new(
+                "RH_fault_category_" + uuid.uuid4().hex)
+            if root is not None:
+                root.children.link(temporary_collection)
+            else:
+                scene.collection.children.link(temporary_collection)
+            raise RuntimeError("injected category assignment failure")
+        rh_operators._call_import_operator = create_asset_for_category_failure
+        rh_operators.move_objects_to_category = create_category_then_fail
+        try:
+            try:
+                category_failure_result = bpy.ops.rh_studio.import_asset(
+                    filepath=category_rollback_source, category="CLOTHING")
+            except RuntimeError:
+                category_failure_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+            rh_operators.move_objects_to_category = original_move_category
+        ensure("CANCELLED" in category_failure_result,
+               "Category assignment fault injection should cancel the import.")
+        ensure({obj.as_pointer() for obj in bpy.data.objects}
+               == objects_before_category_failure,
+               "Category assignment failure left an imported object behind.")
+        ensure({collection.as_pointer() for collection in bpy.data.collections}
+               == collections_before_category_failure,
+               "Category assignment failure left a transaction-created collection behind.")
+
+        # A successful asset import should append a traceable batch without
+        # discarding the project's existing manifest fields.
+        project_dir = os.path.join(tmp, "SmokeTest")
+        source_path = os.path.join(tmp, "ci_source_asset.fbx")
+        with open(source_path, "wb") as stream:
+            stream.write(b"fake source bytes for history metadata test")
+        batch_id = "ci-import-batch-001"
+        imported_at = "2026-10-14T12:00:00+00:00"
+        history_ok, history_result = realhuman_studio.operators.record_project_import(
+            bpy.context.scene, source_path, "CLOTHING", [garment],
+            batch_id, imported_at)
+        ensure(history_ok, "Project import history append failed: %s" % history_result)
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            project_payload = json.load(stream)
+        ensure(project_payload.get("application") == "RealHuman Studio"
+               and len(project_payload.get("asset_sources", [])) == 1,
+               "Import history append discarded project metadata or missed the batch.")
+        imported_batch = project_payload["asset_sources"][0]
+        ensure(imported_batch.get("batch_id") == batch_id
+               and imported_batch.get("category") == "CLOTHING"
+               and imported_batch.get("source_path") == os.path.normpath(os.path.abspath(source_path))
+               and imported_batch.get("source_size_bytes") == os.path.getsize(source_path)
+               and imported_batch.get("object_count") == 1
+               and imported_batch.get("objects", [{}])[0].get("name") == garment.name,
+               "Import history batch metadata is incomplete or inaccurate.")
+
+        # A viewport-selection failure happens after the scene and manifest have
+        # committed. It must not roll back the imported asset or desynchronize the
+        # manifest from the scene.
+        selection_failure_source = os.path.join(tmp, "selection_failure_asset.fbx")
+        with open(selection_failure_source, "wb") as stream:
+            stream.write(b"selection failure fixture")
+        original_import_call = rh_operators._call_import_operator
+        original_select_imported = rh_operators._select_imported_objects
+        def create_asset_for_selection_failure(filepath):
+            mesh_data = bpy.data.meshes.new("RH_selection_failure_mesh")
+            imported_object = bpy.data.objects.new("RH_selection_failure_object", mesh_data)
+            bpy.context.scene.collection.objects.link(imported_object)
+            return {"FINISHED"}
+        def fail_import_selection(context, imported):
+            raise RuntimeError("injected viewport selection failure")
+        rh_operators._call_import_operator = create_asset_for_selection_failure
+        rh_operators._select_imported_objects = fail_import_selection
+        try:
+            try:
+                selection_failure_result = bpy.ops.rh_studio.import_asset(
+                    filepath=selection_failure_source, category="CLOTHING")
+            except RuntimeError:
+                selection_failure_result = {"CANCELLED"}
+        finally:
+            rh_operators._call_import_operator = original_import_call
+            rh_operators._select_imported_objects = original_select_imported
+        ensure("FINISHED" in selection_failure_result,
+               "Viewport selection failure incorrectly cancelled a committed asset import.")
+        retained_imports = [
+            obj for obj in bpy.data.objects
+            if obj.get("rh_studio_source_path") == os.path.normpath(selection_failure_source)
+        ]
+        ensure(len(retained_imports) == 1,
+               "Viewport selection failure removed an already-imported asset.")
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            selection_manifest = json.load(stream)
+        selection_batches = [
+            entry for entry in selection_manifest.get("asset_sources", [])
+            if entry.get("source_path") == os.path.normpath(os.path.abspath(selection_failure_source))
+        ]
+        ensure(len(selection_batches) == 1
+               and selection_batches[0].get("object_count") == 1,
+               "Committed asset import and project manifest drifted after selection failure.")
+
+        # Verify the portable action JSON round-trip against a second rig.
+        # This bone uses Euler keys intentionally: export must serialize the
+        # effective local rotation, not a stale rotation_quaternion property.
+        activate(rig)
+        euler_bone = rig.pose.bones["forearm.R"]
+        euler_bone.rotation_mode = "XYZ"
+        euler_bone.rotation_euler = (0.2, 0.4, 0.6)
+        euler_bone.keyframe_insert(
+            data_path="rotation_euler", frame=bpy.context.scene.frame_current)
+        # An interrupted JSON serialization must not truncate a previous export.
+        preserved_export_path = os.path.join(tmp, "preserved_export.json")
+        preserved_export_contents = '{"keep": "old export"}\n'
+        with open(preserved_export_path, "w", encoding="utf-8") as stream:
+            stream.write(preserved_export_contents)
+        export_restore_frame = 73
+        bpy.context.scene.frame_set(export_restore_frame)
+        original_json_dump = rh_operators.json.dump
+        def fail_json_serialization(*args, **kwargs):
+            raise OSError("injected JSON serialization failure")
+        rh_operators.json.dump = fail_json_serialization
+        try:
+            try:
+                result = bpy.ops.rh_studio.export_action_json(filepath=preserved_export_path)
+            except RuntimeError:
+                result = {"CANCELLED"}
+        finally:
+            rh_operators.json.dump = original_json_dump
+        ensure("CANCELLED" in result,
+               "Injected export serialization failure should cancel the export.")
+        ensure(bpy.context.scene.frame_current == export_restore_frame,
+               "Failed export did not restore the original scene frame.")
+        with open(preserved_export_path, "r", encoding="utf-8") as stream:
+            ensure(stream.read() == preserved_export_contents,
+                   "Failed export truncated an existing JSON file.")
+        ensure(not any(name.startswith("preserved_export.json.tmp-") for name in os.listdir(tmp)),
+               "Failed export left a temporary JSON file behind.")
+
+        json_path = os.path.join(tmp, "ci_motion.json")
+        ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=preserved_export_path),
+               "Action JSON export could not replace an existing file.")
+        with open(preserved_export_path, "r", encoding="utf-8") as stream:
+            replaced_payload = json.load(stream)
+        ensure(replaced_payload.get("format") == "realhuman_studio_action_v1",
+               "Successful export did not atomically replace the old JSON payload.")
+        ensure(bpy.context.scene.frame_current == export_restore_frame,
+               "Successful export did not restore the original scene frame.")
+        ensure(not any(name.startswith("preserved_export.json.tmp-") for name in os.listdir(tmp)),
+               "Successful export left a temporary JSON file behind.")
+
+        json_path = os.path.join(tmp, "ci_motion.json")
+        ensure("FINISHED" in bpy.ops.rh_studio.export_action_json(filepath=json_path),
+               "Action JSON export failed.")
+        ensure(bpy.context.scene.frame_current == export_restore_frame,
+               "Standard export did not restore the original scene frame.")
+        ensure(os.path.isfile(json_path), "Action JSON file was not created.")
+        with open(json_path, "r", encoding="utf-8") as stream:
+            action_payload = json.load(stream)
+        ensure(action_payload.get("format") == "realhuman_studio_action_v1"
+               and len(action_payload.get("frames", [])) >= 2,
+               "Exported action JSON is missing its format marker or frame samples.")
+        exported_quaternion = action_payload["frames"][-1]["bones"]["forearm.R"]["rotation_quaternion"]
+        ensure(abs(exported_quaternion[0] - 1.0) > 0.01
+               or any(abs(component) > 0.05 for component in exported_quaternion[1:]),
+               "Euler-animated bone rotation was not converted to the exported quaternion.")
+        activate(rig_copy)
+        ensure("FINISHED" in bpy.ops.rh_studio.import_action_json(filepath=json_path),
+               "Action JSON import failed.")
+        ensure(rig_copy.animation_data.action is not None
+               and rig_copy.animation_data.action.name.startswith("RH导入动作 | "),
+               "Imported JSON did not create and assign a named action.")
+        # A different source FPS must warn, not silently retime or mutate the scene.
+        mismatched_json_path = os.path.join(tmp, "mismatched_fps_action.json")
+        mismatched_payload = dict(action_payload)
+        scene_fps_before = bpy.context.scene.render.fps / max(bpy.context.scene.render.fps_base, 1e-8)
+        mismatched_payload["fps"] = scene_fps_before * 2.0
+        with open(mismatched_json_path, "w", encoding="utf-8") as stream:
+            json.dump(mismatched_payload, stream)
+        ensure("FINISHED" in bpy.ops.rh_studio.import_action_json(filepath=mismatched_json_path),
+               "Action JSON with a different source FPS should still import.")
+        scene_fps_after = bpy.context.scene.render.fps / max(bpy.context.scene.render.fps_base, 1e-8)
+        ensure(abs(scene_fps_after - scene_fps_before) < 1e-6,
+               "Importing an action must not silently change the scene FPS.")
+        imported_action = rig_copy.animation_data.action
+        invalid_json_path = os.path.join(tmp, "invalid_action.json")
+        with open(invalid_json_path, "w", encoding="utf-8") as stream:
+            json.dump({"format": "not_an_action"}, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_json_path)
+        except RuntimeError:
+            # Blender may raise when an operator reports ERROR and returns CANCELLED.
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Invalid JSON should be rejected without replacing the current action.")
+
+        invalid_fps_path = os.path.join(tmp, "invalid_fps_action.json")
+        invalid_fps_payload = dict(action_payload)
+        invalid_fps_payload["fps"] = float("nan")
+        with open(invalid_fps_path, "w", encoding="utf-8") as stream:
+            json.dump(invalid_fps_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_fps_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Non-finite FPS metadata should be rejected without replacing the current action.")
+
+        invalid_rotation_path = os.path.join(tmp, "invalid_rotation_action.json")
+        invalid_rotation_payload = dict(action_payload)
+        invalid_rotation_payload["rotation_representation"] = "euler_degrees"
+        with open(invalid_rotation_path, "w", encoding="utf-8") as stream:
+            json.dump(invalid_rotation_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_rotation_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Unsupported rotation representations should be rejected without replacing the current action.")
+
+        invalid_quaternion_path = os.path.join(tmp, "invalid_quaternion_action.json")
+        invalid_quaternion_payload = json.loads(json.dumps(action_payload))
+        first_bone_name = next(iter(invalid_quaternion_payload["frames"][0]["bones"]))
+        invalid_quaternion_payload["frames"][0]["bones"][first_bone_name][
+            "rotation_quaternion"] = [0.0, 0.0, 0.0, 0.0]
+        with open(invalid_quaternion_path, "w", encoding="utf-8") as stream:
+            json.dump(invalid_quaternion_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_quaternion_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "A zero-length quaternion should be rejected without replacing the current action.")
+
+        # Very large but finite quaternion components must not overflow during
+        # normalization and produce a zero rotation.
+        extreme_quaternion_path = os.path.join(tmp, "extreme_quaternion_action.json")
+        extreme_quaternion_payload = json.loads(json.dumps(action_payload))
+        extreme_bone_name = next(iter(extreme_quaternion_payload["frames"][0]["bones"]))
+        extreme_quaternion_payload["frames"][0]["bones"][extreme_bone_name][
+            "rotation_quaternion"] = [1e308, 1e308, 0.0, 0.0]
+        with open(extreme_quaternion_path, "w", encoding="utf-8") as stream:
+            json.dump(extreme_quaternion_payload, stream)
+        result = bpy.ops.rh_studio.import_action_json(filepath=extreme_quaternion_path)
+        ensure("FINISHED" in result,
+               "Large finite quaternion components should normalize safely.")
+        imported_action = rig_copy.animation_data.action
+        bpy.context.scene.frame_set(extreme_quaternion_payload["frames"][0]["frame"])
+        extreme_bone = rig_copy.pose.bones.get(extreme_bone_name)
+        ensure(extreme_bone is not None
+               and abs(sum(value * value for value in extreme_bone.rotation_quaternion) - 1.0) < 1e-4,
+               "Imported extreme quaternion should evaluate to a unit quaternion.")
+
+        unordered_frames_path = os.path.join(tmp, "unordered_frames_action.json")
+        unordered_frames_payload = json.loads(json.dumps(action_payload))
+        ensure(len(unordered_frames_payload["frames"]) >= 2,
+               "Action JSON fixture must contain at least two sampled frames.")
+        unordered_frames_payload["frames"][1]["frame"] = unordered_frames_payload["frames"][0]["frame"]
+        with open(unordered_frames_path, "w", encoding="utf-8") as stream:
+            json.dump(unordered_frames_payload, stream)
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=unordered_frames_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        ensure("CANCELLED" in result and rig_copy.animation_data.action == imported_action,
+               "Duplicate or unordered frame numbers should be rejected without replacing the current action.")
+
+        # Validation failure must not mutate the rig's current pose either.
+        activate(rig_copy)
+        protected_bone = rig_copy.pose.bones["forearm.R"]
+        protected_bone.location = (0.31, -0.12, 0.27)
+        protected_bone.rotation_mode = "XYZ"
+        protected_bone.rotation_euler = (0.11, -0.23, 0.37)
+        protected_bone.scale = (1.1, 0.9, 1.2)
+        pose_before_rejected_import = (
+            tuple(protected_bone.location), protected_bone.rotation_mode,
+            tuple(protected_bone.rotation_euler), tuple(protected_bone.scale),
+        )
+        try:
+            result = bpy.ops.rh_studio.import_action_json(filepath=invalid_json_path)
+        except RuntimeError:
+            result = {"CANCELLED"}
+        pose_after_rejected_import = (
+            tuple(protected_bone.location), protected_bone.rotation_mode,
+            tuple(protected_bone.rotation_euler), tuple(protected_bone.scale),
+        )
+        ensure("CANCELLED" in result and pose_after_rejected_import == pose_before_rejected_import,
+               "Rejected action JSON changed the current pose.")
+
+        # Inject a failure after one real keyframe insert, forcing the write-phase rollback path.
+        original_insert = rh_operators._insert_action_json_keyframe
+        inserted_count = {"value": 0}
+        def fail_after_first_keyframe(bone, data_path, frame, group):
+            inserted_count["value"] += 1
+            if inserted_count["value"] > 1:
+                raise RuntimeError("injected keyframe write failure")
+            return original_insert(bone, data_path, frame, group)
+        rh_operators._insert_action_json_keyframe = fail_after_first_keyframe
+        pose_before_write_failure = {
+            bone.name: (
+                tuple(bone.location), bone.rotation_mode,
+                tuple(bone.rotation_quaternion), tuple(bone.rotation_euler),
+                tuple(bone.rotation_axis_angle), tuple(bone.scale),
+            )
+            for bone in rig_copy.pose.bones
+        }
+        action_before_write_failure = rig_copy.animation_data.action
+        action_ids_before_write_failure = {action.as_pointer() for action in bpy.data.actions}
+        try:
+            try:
+                result = bpy.ops.rh_studio.import_action_json(filepath=json_path)
+            except RuntimeError:
+                result = {"CANCELLED"}
+        finally:
+            rh_operators._insert_action_json_keyframe = original_insert
+        ensure("CANCELLED" in result and inserted_count["value"] > 1,
+               "Injected mid-write failure did not exercise rollback.")
+        ensure(rig_copy.animation_data.action == action_before_write_failure,
+               "Mid-write failure did not restore the original Action.")
+        leaked_actions = [
+            (action.name, action.users)
+            for action in bpy.data.actions
+            if action.as_pointer() not in action_ids_before_write_failure
+        ]
+        ensure(not leaked_actions,
+               "Mid-write failure left newly created Actions behind: %s" % leaked_actions)
+        for bone in rig_copy.pose.bones:
+            expected_pose = pose_before_write_failure[bone.name]
+            actual_pose = (
+                tuple(bone.location), bone.rotation_mode,
+                tuple(bone.rotation_quaternion), tuple(bone.rotation_euler),
+                tuple(bone.rotation_axis_angle), tuple(bone.scale),
+            )
+            ensure(actual_pose == expected_pose,
+                   "Mid-write failure left pose changes on bone %s." % bone.name)
+
+    # Isolated test of one shared controller: category roots should keep their
+    # original world transforms, move together, and fit the requested group height.
+    clean_scene()
+    bpy.context.scene.unit_settings.scale_length = 1.0
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.5))
+    body_layer = bpy.context.object
+    body_layer.name = "RH Unified Root Body"
+    body_world_before = body_layer.matrix_world.copy()
+    rh_operators.move_objects_to_category([body_layer], bpy.context.scene, "BASE_BODY")
+
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 1.5))
+    skin_layer = bpy.context.object
+    skin_layer.name = "RH Unified Root Skin"
+    skin_world_before = skin_layer.matrix_world.copy()
+    rh_operators.move_objects_to_category([skin_layer], bpy.context.scene, "SKIN")
+
+    result = bpy.ops.rh_studio.create_character_root()
+    ensure("FINISHED" in result, "Unified character root creation failed.")
+    character_root = bpy.context.active_object
+    ensure(character_root and character_root.get("rh_studio_character_root")
+           and body_layer.parent == character_root and skin_layer.parent == character_root,
+           "Unified root did not parent the body and skin category roots.")
+    ensure((body_layer.matrix_world.translation - body_world_before.translation).length < 1e-5
+           and (skin_layer.matrix_world.translation - skin_world_before.translation).length < 1e-5,
+           "Creating the unified root changed child world positions.")
+    root_count = sum(1 for obj in bpy.context.scene.objects if obj.get("rh_studio_character_root"))
+    ensure(root_count == 1, "Unified character root must not duplicate on its first creation.")
+
+    original_body_x = body_layer.matrix_world.translation.x
+    original_skin_x = skin_layer.matrix_world.translation.x
+    character_root.location.x += 1.0
+    bpy.context.view_layer.update()
+    ensure(abs(body_layer.matrix_world.translation.x - original_body_x - 1.0) < 1e-5
+           and abs(skin_layer.matrix_world.translation.x - original_skin_x - 1.0) < 1e-5,
+           "Unified root translation did not move the body and skin together.")
+
+    result = bpy.ops.rh_studio.fit_character_root_height(target_height=1.0)
+    ensure("FINISHED" in result, "Unified character height calibration failed.")
+    bpy.context.view_layer.update()
+    root_corners = [
+        obj.matrix_world @ Vector(corner)
+        for obj in (body_layer, skin_layer)
+        for corner in obj.bound_box
+    ]
+    fitted_height = max(point.z for point in root_corners) - min(point.z for point in root_corners)
+    fitted_bottom = min(point.z for point in root_corners)
+    ensure(abs(fitted_height - 1.0) < 1e-4 and abs(fitted_bottom) < 1e-4,
+           "Unified root height calibration did not fit 1m and place the bottom on Z=0.")
+
+    root_before_repeat = character_root.as_pointer()
+    result = bpy.ops.rh_studio.create_character_root()
+    ensure("FINISHED" in result, "Updating an existing unified root failed.")
+    ensure(sum(1 for obj in bpy.context.scene.objects if obj.get("rh_studio_character_root")) == 1
+           and bpy.context.active_object.as_pointer() == root_before_repeat,
+           "Updating unified character root created a duplicate or switched controllers.")
+
+    # Exercise actual native Sculpt Mode activation. Headless mode may not have
+    # a VIEW_3D workspace tool context, so brush-tool switching can warn while
+    # Sculpt Mode itself must still activate.
+    clean_scene()
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.5))
+    sculpt_mesh = bpy.context.object
+    sculpt_mesh.name = "RH CI Sculpt Mesh"
+    activate(sculpt_mesh)
+    result = bpy.ops.rh_studio.enter_sculpt_mode(
+        brush_preset="CLAY_STRIPS", radius=72, strength=0.42)
+    ensure("FINISHED" in result and sculpt_mesh.mode == "SCULPT",
+           "Sculpt workflow operator did not enter native Sculpt Mode.")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    realhuman_studio.unregister()
+    ensure(not hasattr(bpy.types.Scene, "rh_studio_target_height")
+           and not hasattr(bpy.types.Scene, "rh_studio_sculpt_radius")
+           and not hasattr(bpy.types.Scene, "rh_studio_sculpt_strength"),
+           "Scene properties were not unregistered.")
+    print("REALHUMAN_STUDIO_SMOKE_TEST: PASS")
+    print("Blender runtime:", bpy.app.version_string)
+
+
+try:
+    run()
+except Exception:
+    traceback.print_exc()
+    raise

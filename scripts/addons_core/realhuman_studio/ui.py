@@ -1,0 +1,259 @@
+# SPDX-FileCopyrightText: 2026 RealHuman Studio contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""3D View sidebar UI for RealHuman Studio."""
+import bpy
+from . import CATEGORY_ITEMS
+from .operators import category_collection
+
+def _active_shape_keys(context):
+    obj = context.active_object
+    if obj and obj.type == "MESH" and obj.data.shape_keys:
+        return obj.data.shape_keys.key_blocks
+    return None
+
+class RH_PT_main(bpy.types.Panel):
+    bl_label = "RealHuman Studio"
+    bl_idname = "RH_PT_realhuman_studio_main"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "RealHuman"
+    bl_order = 0
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        project = layout.box()
+        project.label(text="项目管理", icon="FILE_FOLDER")
+        project.prop(scene, "rh_studio_project_root", text="项目目录")
+        project.operator("rh_studio.setup_project", icon="NEWFOLDER", text="创建项目目录")
+
+        assets = layout.box()
+        assets.label(text="人体与资源", icon="OUTLINER_OB_MESH")
+        assets.prop(scene, "rh_studio_library_root", text="资源目录")
+        assets.prop(scene, "rh_studio_import_category", text="导入分类")
+        op = assets.operator("rh_studio.import_asset", icon="IMPORT", text="选择模型并导入")
+        op.category = scene.rh_studio_import_category
+        row = assets.row(align=True)
+        row.operator("rh_studio.create_layers", icon="OUTLINER_COLLECTION", text="初始化分类")
+        assign = row.operator("rh_studio.assign_category", icon="FILE_PARENT", text="整理所选")
+        assign.category = scene.rh_studio_import_category
+        assets.operator("rh_studio.audit_selected_assets", icon="FILE_TEXT", text="检查所选资源并生成 JSON 报告")
+        assets.operator("rh_studio.audit_project_assets", icon="VIEWZOOM", text="检查整个项目资源与导入历史")
+        assets.operator("rh_studio.scan_missing_sources", icon="FILEBROWSER", text="扫描缺失资源并预览候选")
+        assets.operator("rh_studio.apply_missing_source_repairs", icon="FILE_REFRESH", text="应用安全候选修复（需确认）")
+        assets.operator("rh_studio.view_missing_source_repair_results", icon="TEXT", text="查看修复结果 / 复制路径")
+        assets.operator("rh_studio.relink_asset_source", icon="FILE_REFRESH", text="重新关联所选资源的原始文件")
+        assets.operator("rh_studio.export_asset_manifest", icon="EXPORT", text="导出资源清单（米制 / 绑定 / 网格）")
+        assets.operator("rh_studio.diagnose_asset_scale", icon="DRIVER_DISTANCE", text="诊断尺寸 / 可能单位（不修改模型）")
+        normalize = assets.operator("rh_studio.normalize_selected_assets", icon="ORIENTATION_GLOBAL", text="规范化位置（居中 / 落地）")
+
+        character = layout.box()
+        character.label(text="统一角色控制", icon="OUTLINER_OB_ARMATURE")
+        character.operator("rh_studio.create_character_root", icon="EMPTY_AXIS",
+                           text="建立 / 更新全身统一控制")
+        active = context.active_object
+        root_controls = character.column()
+        root_controls.enabled = bool(active and active.get("rh_studio_character_root"))
+        op = root_controls.operator("rh_studio.fit_character_root_height",
+                                    icon="FULLSCREEN_ENTER", text="统一校准整个角色身高")
+        op.target_height = scene.rh_studio_target_height
+        character.label(text="整体控制用于统调身高、位置和姿态；各层与零件仍可独立选择、编辑。先分好分类图层，再建立统一控制。")
+
+        layers = layout.box()
+        layers.label(text="解剖图层", icon="OUTLINER")
+        for category, label, _description in CATEGORY_ITEMS:
+            collection = category_collection(scene, category)
+            row = layers.row(align=True)
+            count = len(collection.objects) if collection else 0
+            row.label(text=label, icon="OUTLINER_COLLECTION")
+            row.label(text=str(count))
+            toggle = row.operator(
+                "rh_studio.toggle_category", text="",
+                icon="HIDE_ON" if collection and collection.hide_viewport else "HIDE_OFF",
+                emboss=False)
+            toggle.category = category
+            select = row.operator("rh_studio.select_category", text="", icon="RESTRICT_SELECT_OFF")
+            select.category = category
+
+        sculpt_box = layout.box()
+        sculpt_box.label(text="泥塑式雕刻（Blender 原生笔刷）", icon="SCULPTMODE_HLT")
+        sculpt_box.prop(scene, "rh_studio_sculpt_radius", text="笔刷半径")
+        sculpt_box.prop(scene, "rh_studio_sculpt_strength", text="笔刷强度")
+        row = sculpt_box.row(align=True)
+        for brush, label in (("CLAY_STRIPS", "泥塑堆积"), ("DRAW", "推拉"),
+                             ("GRAB", "抓取"), ("SMOOTH", "平滑")):
+            op = row.operator("rh_studio.enter_sculpt_mode", text=label)
+            op.brush_preset = brush
+            op.radius = scene.rh_studio_sculpt_radius
+            op.strength = scene.rh_studio_sculpt_strength
+        row = sculpt_box.row(align=True)
+        for brush, label in (("CREASE", "刻线"), ("SCRAPE", "刮削"), ("INFLATE", "鼓起")):
+            op = row.operator("rh_studio.enter_sculpt_mode", text=label)
+            op.brush_preset = brush
+            op.radius = scene.rh_studio_sculpt_radius
+            op.strength = scene.rh_studio_sculpt_strength
+        sculpt_box.label(text="使用原生网格雕刻笔刷，不模拟真实物质流变；复杂雕刻前请保存副本或使用多分辨率。")
+
+        body = layout.box()
+        body.label(text="比例与形态", icon="MOD_MESHDEFORM")
+        body.prop(scene, "rh_studio_target_height")
+        op = body.operator("rh_studio.fit_height", icon="FULLSCREEN_ENTER", text="校准当前网格")
+        op.target_height = scene.rh_studio_target_height
+        op = body.operator("rh_studio.fit_selected_group_height", icon="CONSTRAINT", text="校准所选资源组（含骨架 / 衣物）")
+        op.target_height = scene.rh_studio_target_height
+        body.label(text="组校准会缩放所有选中对象；请先选齐身体网格、骨架和需同步的衣物。")
+        body.operator("rh_studio.generate_body_proportion_keys", icon="MOD_MESHDEFORM",
+                      text="生成 / 更新肩胸腰臀控制")
+        body.operator("rh_studio.create_body_proportion_masks", icon="MOD_VERTEX_WEIGHT",
+                      text="创建缺失的肩胸腰臀初始遮罩")
+        preset_row = body.row(align=True)
+        for preset, label in (("MALE", "男性轮廓"), ("FEMALE", "女性轮廓"),
+                              ("ATHLETIC", "运动型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
+            op.preset = preset
+        preset_row = body.row(align=True)
+        for preset, label in (("SLIM", "纤瘦型"), ("HEAVY", "厚实体型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
+            op.preset = preset
+        body.label(text="统一应用到已分类的人体/解剖网格：")
+        preset_row = body.row(align=True)
+        for preset, label in (("MALE", "男性"), ("FEMALE", "女性"), ("ATHLETIC", "运动型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label, icon="MOD_MESHDEFORM")
+            op.preset = preset
+            op.scope = "CHARACTER"
+        preset_row = body.row(align=True)
+        for preset, label in (("SLIM", "纤瘦型"), ("HEAVY", "厚实体型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
+            op.preset = preset
+            op.scope = "CHARACTER"
+        body.label(text="统一应用只会修改各网格中同名且已存在的肩胸腰臀形态键；缺失控制会跳过，不会生成完整男女模型。")
+        body.label(text="肌肉/脂肪、五官、毛发与分层解剖仍需对应真实资产和独立控制。")
+        body.label(text="适用于单个人体网格（局部 Z 轴向上）。初始遮罩按高度粗分区；已有同名权重组不会覆盖，请用权重绘制精修。")
+        if context.active_object and context.active_object.type == "MESH":
+            keys = _active_shape_keys(context)
+            if keys and len(keys) > 1:
+                body.separator()
+                body.label(text="当前网格的形态键")
+                for key in list(keys)[1:]:
+                    body.prop(key, "value", text=key.name, slider=True)
+                body.operator("rh_studio.reset_shape_keys", icon="LOOP_BACK", text="重置形态键")
+            else:
+                body.label(text="当前网格没有形态键。", icon="INFO")
+                body.label(text="仅显示网格本身已有的形态键。")
+        else:
+            body.label(text="选择一个人体网格后显示形态键。", icon="INFO")
+
+
+        rig_box = layout.box()
+        rig_box.label(text="动作 / 火柴人骨架", icon="ARMATURE_DATA")
+        rig_box.label(text="从当前人体网格估算骨骼；生成后可在视图中选骨骼旋转。")
+        rig_box.operator("rh_studio.generate_simple_rig", icon="ARMATURE_DATA", text="生成火柴人骨架")
+        rig_box.label(text="极简圆头 + 大字身体；只拖四个手脚端点。")
+        is_rig = bool(context.active_object and context.active_object.type == "ARMATURE")
+        pose_controls = rig_box.column()
+        pose_controls.enabled = is_rig
+        if is_rig:
+            pose_controls.operator("rh_studio.simple_2d_pose_pad", text="打开简笔摆姿")
+            mode_label = "退出姿势编辑" if context.active_object.mode == "POSE" else "进入姿势编辑（旋转骨骼）"
+            pose_controls.operator("rh_studio.toggle_pose_mode", text=mode_label)
+            if context.active_object.mode == "POSE" and context.active_pose_bone:
+                adjust_op = pose_controls.operator(
+                    "rh_studio.adjust_active_bone", icon="DRIVER_ROTATIONAL_DIFFERENCE",
+                    text="微调选中骨骼旋转")
+                adjust_op.bone_name = context.active_pose_bone.name
+            elif context.active_object.mode == "POSE":
+                pose_controls.label(text="在视图中选中一根骨骼后，可微调局部 XYZ 旋转。")
+        row = pose_controls.row(align=True)
+        for preset, label in (("REST", "站立复位"), ("RELAXED", "放松"), ("ARMS_UP", "举手")):
+            op = row.operator("rh_studio.apply_pose_preset", text=label)
+            op.preset = preset
+        row = pose_controls.row(align=True)
+        for preset, label in (("SITTING", "坐姿"), ("WAVE", "挥手")):
+            op = row.operator("rh_studio.apply_pose_preset", text=label)
+            op.preset = preset
+        pose_controls.operator("rh_studio.insert_pose_keyframe", icon="KEY_HLT", text="记录当前帧关键姿势")
+        row = pose_controls.row(align=True)
+        row.operator("rh_studio.save_pose_preset", icon="PRESET", text="保存动作预设")
+        row.operator("rh_studio.load_pose_preset", icon="IMPORT", text="载入动作预设")
+        action_row = pose_controls.row(align=True)
+        action_row.operator("rh_studio.save_action_set", icon="ACTION", text="保存整套动作")
+        action_row.operator("rh_studio.load_action_set", icon="IMPORT", text="载入整套动作")
+        json_row = pose_controls.row(align=True)
+        json_row.operator("rh_studio.export_action_json", icon="EXPORT", text="导出动作 JSON")
+        json_row.operator("rh_studio.import_action_json", icon="IMPORT", text="导入动作 JSON")
+        pose_controls.operator("rh_studio.check_action_sequence", icon="CHECKMARK", text="检查动作序列")
+        pose_controls.operator("rh_studio.check_pose_clearance", icon="MOD_PHYSICS", text="检查肢体间距风险")
+        facing_row = pose_controls.row(align=True)
+        for facing, label in (("FRONT", "正面"), ("THREE_QUARTER_L", "左45°"), ("THREE_QUARTER_R", "右45°")):
+            op = facing_row.operator("rh_studio.turn_body_preset", text=label)
+            op.facing = facing
+        facing_row = pose_controls.row(align=True)
+        for facing, label in (("SIDE_L", "左侧"), ("SIDE_R", "右侧"), ("BACK", "背面")):
+            op = facing_row.operator("rh_studio.turn_body_preset", text=label)
+            op.facing = facing
+        pose_controls.label(text="简笔模式：K 记录关键帧，R 复位，Esc / 右键退出。")
+        pose_controls.label(text="也可在时间轴换帧，反复摆姿并记录，组成动作。")
+
+        face_box = layout.box()
+        face_box.label(text="面部表情预设", icon="SHAPEKEY_DATA")
+        face_box.label(text="仅驱动模型已有且名称可识别的表情形态键。")
+        active = context.active_object
+        if active and active.type == "MESH" and active.data.shape_keys and len(active.data.shape_keys.key_blocks) > 1:
+            row = face_box.row(align=True)
+            for preset, label in (("SMILE", "微笑"), ("SAD", "悲伤"), ("ANGRY", "愤怒")):
+                op = row.operator("rh_studio.expression_preset", text=label)
+                op.preset = preset
+            row = face_box.row(align=True)
+            for preset, label in (("SURPRISE", "惊讶"), ("BLINK", "眨眼"), ("RESET", "复位")):
+                op = row.operator("rh_studio.expression_preset", text=label)
+                op.preset = preset
+        else:
+            face_box.label(text="选择带有面部表情 Shape Keys 的网格后使用。")
+        body_reaction = layout.box()
+        body_reaction.label(text="情绪与身体形态反应", icon="OUTLINER_OB_ARMATURE")
+        body_reaction.label(text="例如愤怒青筋、肌肉紧绷；需模型已有对应形态键。")
+        active = context.active_object
+        if active and active.type == "MESH" and active.data.shape_keys and len(active.data.shape_keys.key_blocks) > 1:
+            row = body_reaction.row(align=True)
+            op = row.operator("rh_studio.body_reaction_preset", text="愤怒：青筋凸起")
+            op.reaction = "ANGER_VEINS"
+            op = row.operator("rh_studio.body_reaction_preset", text="肌肉紧绷")
+            op.reaction = "MUSCLE_TENSE"
+            op = body_reaction.operator("rh_studio.body_reaction_preset", text="身体反应复位")
+            op.reaction = "RESET"
+        else:
+            body_reaction.label(text="选择带有身体反应 Shape Keys 的网格后使用。")
+
+        view = layout.box()
+        view.label(text="标准视图", icon="ORIENTATION_VIEW")
+        for axes in (("FRONT", "BACK"), ("LEFT", "RIGHT"), ("TOP", "BOTTOM")):
+            row = view.row(align=True)
+            for axis in axes:
+                op = row.operator("rh_studio.set_view", text={
+                    "FRONT": "前", "BACK": "后", "LEFT": "左",
+                    "RIGHT": "右", "TOP": "顶", "BOTTOM": "底"}[axis])
+                op.axis = axis
+
+
+        fabric = layout.box()
+        fabric.label(text="服装印花", icon="MATERIAL")
+        fabric.label(text="支持 UV / 物体 / 生成坐标、印花与浸染软边、织物微纹理、位置和缩放；编辑模式可只给选中面绘制。")
+        fabric.operator("rh_studio.create_fabric_print", icon="NODE_MATERIAL", text="创建 / 应用印花材质")
+
+        export_box = layout.box()
+        export_box.label(text="导出所选对象", icon="EXPORT")
+        row = export_box.row(align=True)
+        for export_format, label in (("GLB", "GLB"), ("FBX", "FBX"), ("OBJ", "OBJ")):
+            op = row.operator("rh_studio.export_model", text=label)
+            op.export_format = export_format
+
+CLASSES = (RH_PT_main,)
+
+def register():
+    for cls in CLASSES:
+        bpy.utils.register_class(cls)
+
+def unregister():
+    for cls in reversed(CLASSES):
+        bpy.utils.unregister_class(cls)
