@@ -116,7 +116,19 @@ class RH_PT_main(bpy.types.Panel):
         for preset, label in (("SLIM", "纤瘦型"), ("HEAVY", "厚实体型")):
             op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
             op.preset = preset
-        body.label(text="轮廓模板仅设置现有肩胸腰臀形态键；不是完整男女模型生成器，肌肉/脂肪、五官、毛发需要基础资产提供对应控制。")
+        body.label(text="统一应用到已分类的人体/解剖网格：")
+        preset_row = body.row(align=True)
+        for preset, label in (("MALE", "男性"), ("FEMALE", "女性"), ("ATHLETIC", "运动型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label, icon="MOD_MESHDEFORM")
+            op.preset = preset
+            op.scope = "CHARACTER"
+        preset_row = body.row(align=True)
+        for preset, label in (("SLIM", "纤瘦型"), ("HEAVY", "厚实体型")):
+            op = preset_row.operator("rh_studio.apply_body_silhouette_preset", text=label)
+            op.preset = preset
+            op.scope = "CHARACTER"
+        body.label(text="统一应用只会修改各网格中同名且已存在的肩胸腰臀形态键；缺失控制会跳过，不会生成完整男女模型。")
+        body.label(text="肌肉/脂肪、五官、毛发与分层解剖仍需对应真实资产和独立控制。")
         body.label(text="适用于单个人体网格（局部 Z 轴向上）。初始遮罩按高度粗分区；已有同名权重组不会覆盖，请用权重绘制精修。")
         if context.active_object and context.active_object.type == "MESH":
             keys = _active_shape_keys(context)
