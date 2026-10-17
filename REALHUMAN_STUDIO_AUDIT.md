@@ -367,3 +367,9 @@ Continue in the requested order: finish CI-backed action-set regression checks; 
 - **上下文处理：** 无 VIEW_3D 工具上下文或工具切换异常时，算子保留雕刻模式并警告用户需从视口工具栏选择；这避免把工具切换失败报告成完整成功。活动网格无法切换模式时会取消。
 - **测试：** smoke 新增属性注册/注销断言，并在独立网格上调用算子检查进入 SCULPT 模式。提交：Scene 属性 `05a2e6cd2db9e9e718c8d4911a9d1c0536e03c66`、算子 `95d1fa223fb1c39893a95629befe989a9048033a`、UI `85caa8a3d72393f98c11ba36ee9a22fe6e0bd8f8`、测试 `3748e17b493387cb2d605866cca60360d9caf844`、注销清理 `ab928b952e5d65cd30aec5b29662de87bee23d0b`。
 - **限制：** 这是原生雕刻模式的工作流入口，不是自研物理泥塑模拟器。实际工具资产加载、笔刷半径/强度绑定、撤销、多分辨率、拓扑密度和雕刻结果必须在目标 GUI/runtime 验证；当前无对应 CI/runtime 通过记录。
+
+## 2026-10-17 审计补充：角色图层统一轮廓预设
+
+- **实现：** `RH_OT_apply_body_silhouette_preset` 增加 `ACTIVE` / `CHARACTER` 两种作用范围。角色范围读取已分类的解剖/人体网格，对每个目标仅修改已存在的 `RH体型 | 肩宽`、`胸围`、`腰围`、`臀宽` 键，并尊重每个键的滑块边界。
+- **测试：** `tests/realhuman_studio_smoke.py` 新增两个分类网格的角色级模板应用检查，并断言无关用户形态键值不变。提交：算子 `0bd86ee106229646ba466eea622179d6f944669e`、UI `4602aa668bba36d274ebf57c5694e88d0da1342d`、测试 `98c1f38567e038ee81f6ca51a45219e25d33c195`。
+- **限制/风险：** 只对已有 morph 键起作用；若基础人体资产没有对应键，相关结构不会自动变形。它不是全身解剖生成器，也不创建肌肉/脂肪/五官/毛发数据。当前没有本轮 Blender runtime/CI 结果，必须运行 smoke suite 并在真实模型上验收后才能提升验证状态。
