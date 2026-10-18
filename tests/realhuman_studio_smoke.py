@@ -816,13 +816,27 @@ def run():
                "Project-wide asset audit failed.")
         with open(project_audit_path, "r", encoding="utf-8") as stream:
             project_audit = json.load(stream)
+        # Imported asset licensing is reported as unverified unless a future
+        # independent verification workflow explicitly marks it verified.
+        scan_asset["rh_studio_category"] = "SKIN"
+        scan_asset["rh_studio_source_url"] = "https://example.org/scan-asset"
+        scan_asset["rh_studio_license"] = "CC0"
+        scan_asset["rh_studio_license_status"] = "user_supplied"
+        scan_asset["rh_studio_attribution"] = "Smoke test attribution"
         ensure(project_audit.get("schema") == "realhuman_studio_project_integrity_v1"
                and project_audit.get("summary", {}).get("missing_source_files", 0) >= 1
                and project_audit.get("summary", {}).get("missing_armature_targets", 0) >= 1
                and any("源文件不存在" in warning
                        for warning in project_audit.get("project_history", {}).get("warnings", []))
-               and project_audit.get("object_count", 0) >= 1,
-               "Project audit missed broken links or project history inconsistencies.")
+               and project_audit.get("object_count", 0) >= 1
+               and project_audit.get("summary", {}).get("unverified_asset_licenses", 0) >= 1
+               and project_audit.get("category_counts", {}).get("SKIN", 0) >= 1
+               and any(record.get("source_url") == "https://example.org/scan-asset"
+                       and record.get("license") == "CC0"
+                       and record.get("license_status") == "user_supplied"
+                       and record.get("attribution") == "Smoke test attribution"
+                       for record in project_audit.get("objects", [])),
+               "Project audit missed broken links, category counts, license metadata, or project history inconsistencies.")
         # Candidate scan is preview-only and ranks exact filename/extension candidates by recorded size.
         scan_root = os.path.join(audit_tmp, "source_recovery")
         os.makedirs(scan_root, exist_ok=True)
