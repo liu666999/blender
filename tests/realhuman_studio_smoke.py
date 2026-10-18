@@ -779,6 +779,11 @@ def run():
     broken_asset["rh_studio_source_path"] = os.path.join(
         tempfile.gettempdir(), "rh_studio_source_that_does_not_exist.fbx")
     broken_asset["rh_studio_import_batch_id"] = "ci-broken-link-batch"
+    broken_asset["rh_studio_category"] = "SKIN"
+    broken_asset["rh_studio_source_url"] = "https://example.org/scan-asset"
+    broken_asset["rh_studio_license"] = "CC0"
+    broken_asset["rh_studio_license_status"] = "user_supplied"
+    broken_asset["rh_studio_attribution"] = "Smoke test attribution"
     broken_asset.modifiers.new(name="Missing Rig Target", type="ARMATURE")
     activate(broken_asset)
     with tempfile.TemporaryDirectory(prefix="rh_studio_broken_asset_audit_") as audit_tmp:
@@ -818,11 +823,6 @@ def run():
             project_audit = json.load(stream)
         # Imported asset licensing is reported as unverified unless a future
         # independent verification workflow explicitly marks it verified.
-        scan_asset["rh_studio_category"] = "SKIN"
-        scan_asset["rh_studio_source_url"] = "https://example.org/scan-asset"
-        scan_asset["rh_studio_license"] = "CC0"
-        scan_asset["rh_studio_license_status"] = "user_supplied"
-        scan_asset["rh_studio_attribution"] = "Smoke test attribution"
         ensure(project_audit.get("schema") == "realhuman_studio_project_integrity_v1"
                and project_audit.get("summary", {}).get("missing_source_files", 0) >= 1
                and project_audit.get("summary", {}).get("missing_armature_targets", 0) >= 1
