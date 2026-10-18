@@ -42,3 +42,14 @@ The validation helper records mesh topology counts, dimensions, UV layers, mater
 ## Resource combination strategy
 
 Use Blender Studio Human Base Meshes v1.4.1 as the CC0 base-body candidate and Écorché as an optional CC BY-SA 4.0 skeleton/muscle source. Build each into clearly separated, named anatomy collections; store source URL, license, attribution and transforms in the project manifest. Do not assume the two assets share topology, coordinates, body proportions or compatible rigging. Organ/vessel/nerve/skin/fat/hair sources remain separate acquisition and per-asset license-review tasks. A visually aligned model is not proof that every included structure is anatomically or legally validated.
+
+
+## 2026-10-18：原生 .blend 资产追加支持
+
+- RealHuman Studio 资源导入器现在支持 .blend 文件：通过 Blender 的 library API 追加真实对象数据，再纳入既有分类、来源路径、导入批次和项目历史记录。
+- 文件选择器与资源重新关联入口已加入 .blend 扩展名。
+- 推荐的首个真实人体验证源仍是官方 Human Base Meshes v1.4.1，官方页面标注 CC0，约 49 MB，要求 Blender 4.2 或更新版本。下载/许可信息请以官方页面和压缩包内说明为准。
+- 官方入口：https://www.blender.org/download/demo-files/
+- 官方镜像：https://mirror.blender.org/demo/asset-bundles/human-base-meshes/human-base-meshes-bundle-v1.4.1.zip
+- 注意：当前 .blend 导入会追加该文件中的所有对象，而不是弹出单个资产选择器。对于包含大量资产的库文件，建议先复制文件或使用单独的验证场景；后续可增加库内对象/集合选择。
+- 自动化测试已新增临时 .blend 资源写入、追加、分类及来源元数据检查；尚未在 Blender runtime 中执行。
