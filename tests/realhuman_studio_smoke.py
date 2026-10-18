@@ -232,6 +232,42 @@ def run():
            and abs(proportion_keys["RH体型 | 腰围"].value - (-0.25)) < 1e-6,
            "Athletic silhouette preset values were not applied.")
 
+    # Saved body templates must round-trip all supported RH parameter families.
+    template_keys = {}
+    for key_name in ("RH脸型 | 眼距", "RH肌肉 | 整体量",
+                     "RH脂肪 | 整体量", "RH毛发 | 发量"):
+        key = proportion_mesh.shape_key_add(name=key_name, from_mix=False)
+        key.value = 0.2
+        template_keys[key_name] = key
+    template_keys["RH脸型 | 眼距"].value = 0.35
+    template_keys["RH肌肉 | 整体量"].value = 0.6
+    template_keys["RH脂肪 | 整体量"].value = -0.25
+    template_keys["RH毛发 | 发量"].value = 0.8
+    with tempfile.TemporaryDirectory(prefix="rh_body_template_") as template_dir:
+        template_path = os.path.join(template_dir, "body_template.json")
+        result = bpy.ops.rh_studio.export_body_template(filepath=template_path)
+        ensure("FINISHED" in result and os.path.isfile(template_path),
+               "Body template JSON export failed.")
+        for key in template_keys.values():
+            key.value = 0.0
+        result = bpy.ops.rh_studio.import_body_template(filepath=template_path)
+        ensure("FINISHED" in result, "Body template JSON import failed.")
+        expected_template_values = {
+            "RH脸型 | 眼距": 0.35, "RH肌肉 | 整体量": 0.6,
+            "RH脂肪 | 整体量": -0.25, "RH毛发 | 发量": 0.8,
+        }
+        for key_name, expected in expected_template_values.items():
+            ensure(abs(template_keys[key_name].value - expected) < 1e-6,
+                   "Body template did not restore %s." % key_name)
+        invalid_path = os.path.join(template_dir, "invalid.json")
+        with open(invalid_path, "w", encoding="utf-8") as handle:
+            json.dump({"schema": "wrong_schema", "shape_key_values": {"RH体型 | 肩宽": 1.0}}, handle)
+        before_invalid_load = float(proportion_keys["RH体型 | 肩宽"].value)
+        result = bpy.ops.rh_studio.import_body_template(filepath=invalid_path)
+        ensure("CANCELLED" in result
+               and abs(proportion_keys["RH体型 | 肩宽"].value - before_invalid_load) < 1e-6,
+               "Invalid body template must be rejected without changing the mesh.")
+
     # Character-wide presets should update only matching keys on classified
     # meshes, while leaving unrelated user-authored keys untouched.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(6.0, 0.0, 1.0))
