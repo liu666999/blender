@@ -53,10 +53,45 @@ def main():
     inventory["source_blend"] = source_path
     inventory["counts"] = {key: len(value) for key, value in inventory.items()
                             if isinstance(value, list)}
+
+    # Name-based suggestions are intentionally advisory. They never alter the
+    # source file or auto-import objects; review them before using category_map_json.
+    category_rules = (
+        ("BASE_BODY", ("base body", "base_body", "basemesh", "base mesh", "body base", "bodymesh", "body mesh", "human body")),
+        ("SKIN", ("skin", "epiderm", "dermis", "皮肤")),
+        ("FAT", ("fat", "adipose", "脂肪")),
+        ("BONES", ("bone", "skeleton", "skeletal", "骨骼")),
+        ("MUSCLES", ("muscle", "muscular", "肌肉")),
+        ("NERVES", ("nerve", "nervous", "神经")),
+        ("VESSELS", ("vessel", "artery", "arteries", "vein", "veins", "vascular", "血管")),
+        ("ORGANS", ("organ", "organs", "viscera", "内脏", "器官")),
+        ("HAIR", ("hair", "scalp", "毛发")),
+        ("TISSUE", ("fascia", "connective tissue", "tissue", "筋膜", "组织")),
+        ("CLOTHING", ("cloth", "clothing", "garment", "衣服", "服装")),
+        ("RIG", ("armature", "rig", "skeleton rig", "骨架绑定")),
+    )
+
+    suggestions = []
+    for object_name in inventory["objects"]:
+        normalized = object_name.casefold()
+        matches = []
+        for category, terms in category_rules:
+            if any(term.casefold() in normalized for term in terms):
+                matches.append(category)
+        suggestions.append({
+            "object_name": object_name,
+            "suggested_category": matches[0] if len(matches) == 1 else None,
+            "candidate_categories": matches,
+            "status": "suggested_review_required" if len(matches) == 1 else (
+                "ambiguous_review_required" if matches else "unclassified_review_required"),
+        })
+    inventory["category_suggestions"] = suggestions
     inventory["notes"] = [
         "This report inventories datablock names only; it does not prove mesh quality or anatomy.",
         "Object names are exact source-library names and may differ from collection names.",
         "A collection's nested hierarchy is not inferred from the name list.",
+        "category_suggestions are keyword-based hints only; manually verify anatomy before importing.",
+        "An object name can match multiple categories or none; ambiguous/unclassified entries are not auto-assigned.",
         "Inspect upstream license and attribution separately before redistributing any asset.",
     ]
 
