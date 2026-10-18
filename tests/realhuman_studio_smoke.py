@@ -131,6 +131,25 @@ def run():
 
     clean_scene()
 
+    # A .blend library must append real objects through the same tracked import path.
+    with tempfile.TemporaryDirectory(prefix="rh_blend_asset_") as blend_dir:
+        blend_path = os.path.join(blend_dir, "source_asset.blend")
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.9, location=(0.0, 0.0, 0.9))
+        library_sphere = bpy.context.object
+        library_sphere.name = "RH CI Appended Library Sphere"
+        bpy.data.libraries.write(blend_path, {library_sphere}, fake_user=True)
+        bpy.data.objects.remove(library_sphere, do_unlink=True)
+        result = bpy.ops.rh_studio.import_asset(filepath=blend_path, category="BASE_BODY")
+        ensure("FINISHED" in result, "Importing a .blend library object failed.")
+        appended = bpy.data.objects.get("RH CI Appended Library Sphere")
+        ensure(appended is not None and appended.type == "MESH",
+               ".blend import did not append the expected real mesh object.")
+        ensure(appended.get("rh_studio_category") == "BASE_BODY"
+               and appended.get("rh_studio_source_path") == os.path.abspath(blend_path)
+               and appended.get("rh_studio_import_batch_id"),
+               ".blend import did not preserve category/source/batch tracking.")
+        bpy.data.objects.remove(appended, do_unlink=True)
+
     # Non-finite coordinates must be rejected before any shape-key mutation.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
     nonfinite_mesh = bpy.context.object
