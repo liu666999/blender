@@ -393,3 +393,12 @@
 - smoke test 增加对象级来源/许可证/署名属性断言。
 - 代码提交：63e51249b6eb7fc5c6adcbf142139ccacb1bcecb；测试提交：cc42420e8c27cf4640ac8861a9eec8da9121cadb。
 - 尚未在 Blender runtime 执行；manifest 的实际写入和 GUI 字段显示仍需验证。
+
+
+## 2026-10-18 新增：项目审计报告纳入许可状态与解剖分类汇总（待运行验证）
+
+- 项目完整性 JSON 报告新增 `category_counts`，可统计各分类对象数量。
+- 每个对象记录 `source_url`、`license`、`license_status`、`attribution`。
+- 对已分类或有来源路径/来源 URL 的资源，如果许可状态不是 `verified`，报告会增加警告并计入 `unverified_asset_licenses`；用户填写 `CC0` 只算声明，不会被视为已核验。
+- 测试增加分类与许可元数据断言。代码：`0de7e098a412b4405ab074c1e8da5a0b66547278`；测试：`5310621ae05bff4d75f6a008e8421306299c72bf`。
+- 尚未执行 Blender runtime；真实资产审计结果尚未产生。
