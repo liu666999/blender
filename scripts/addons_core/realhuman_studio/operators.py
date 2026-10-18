@@ -350,6 +350,33 @@ class RH_OT_create_layers(bpy.types.Operator):
         self.report({"INFO"}, "已创建 10 个分类图层。")
         return {"FINISHED"}
 
+def parse_import_category_map(raw_json, imported_names, fallback_category):
+    """Parse optional exact-object-name -> anatomy-category JSON mapping."""
+    allowed = {item[0] for item in CATEGORY_ITEMS}
+    if fallback_category not in allowed:
+        raise ValueError("默认分类无效：" + str(fallback_category))
+    if not str(raw_json or "").strip():
+        return {name: fallback_category for name in imported_names}
+    try:
+        mapping = json.loads(raw_json)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("对象分类映射不是有效 JSON：" + str(exc))
+    if not isinstance(mapping, dict):
+        raise ValueError("对象分类映射必须是 JSON 对象")
+    available_names = set(imported_names)
+    unknown_names = sorted(str(name) for name in mapping if name not in available_names)
+    if unknown_names:
+        raise ValueError("映射包含未导入的对象名称（必须精确匹配）：" + ", ".join(unknown_names))
+    resolved = {name: fallback_category for name in imported_names}
+    for name, category in mapping.items():
+        if not isinstance(name, str) or not isinstance(category, str):
+            raise ValueError("映射中的对象名和分类值必须都是字符串")
+        if category not in allowed:
+            raise ValueError("对象 %s 的分类无效：%s" % (name, category))
+        resolved[name] = category
+    return resolved
+
+
 class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
     bl_idname = "rh_studio.import_asset"
     bl_label = "导入模型到当前分类"
@@ -358,6 +385,11 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
     filename_ext = ""
     filter_glob: StringProperty(default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
     category: EnumProperty(name="分类", items=CATEGORY_ITEMS, default="BASE_BODY")
+    category_map_json: StringProperty(
+        name="对象分类映射 JSON",
+        description="可选：按导入对象精确名称指定分类；未列出的对象使用上方默认分类",
+        default="",
+    )
     blend_object_names: StringProperty(
         name="仅导入这些对象",
         description="仅对 .blend 有效；填写源文件中的精确对象名，多个名称用英文逗号分隔；留空则导入全部对象",
@@ -371,6 +403,8 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
         layout = self.layout
         layout.prop(self, "category")
         layout.prop(self, "blend_object_names")
+        layout.prop(self, "category_map_json")
+        layout.label(text='示例：{"Body":"BASE_BODY","Skin":"SKIN"}；分类值需使用内部分类 ID。')
         layout.label(text="仅 .blend 生效；留空导入全部对象。名称必须与源文件完全一致。")
         box = layout.box()
         box.label(text="资源来源与许可记录")
@@ -424,7 +458,13 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                 # that as a failed transaction so the shared rollback path
                 # removes those partial results instead of leaking them.
                 raise RuntimeError("导入器完成了操作，但没有产生新对象。")
-            move_objects_to_category(imported, context.scene, self.category, filepath)
+            category_map = parse_import_category_map(
+                self.category_map_json, [obj.name for obj in imported], self.category)
+            grouped = {}
+            for obj in imported:
+                grouped.setdefault(category_map[obj.name], []).append(obj)
+            for category, category_objects in grouped.items():
+                move_objects_to_category(category_objects, context.scene, category, filepath)
             batch_id = uuid.uuid4().hex
             imported_at = datetime.now().astimezone().isoformat(timespec="seconds")
             for obj in imported:
@@ -436,7 +476,9 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
                     "user_supplied" if self.license_name.strip() else "unverified")
                 obj["rh_studio_attribution"] = self.attribution.strip()
             history_saved, history_message = record_project_import(
-                context.scene, filepath, self.category, imported, batch_id, imported_at,
+                context.scene, filepath,
+                next(iter(grouped)) if len(grouped) == 1 else "MIXED",
+                imported, batch_id, imported_at,
                 self.source_url, self.license_name, self.attribution)
         except Exception as exc:
             # Importers may create several datablocks before raising. Remove every
