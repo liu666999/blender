@@ -237,6 +237,8 @@ def run():
     for key_name in ("RH脸型 | 眼距", "RH肌肉 | 整体量",
                      "RH脂肪 | 整体量", "RH毛发 | 发量"):
         key = proportion_mesh.shape_key_add(name=key_name, from_mix=False)
+        key.slider_min = -1.0
+        key.slider_max = 1.0
         key.value = 0.2
         template_keys[key_name] = key
     template_keys["RH脸型 | 眼距"].value = 0.35
