@@ -98,3 +98,6 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 - 提交：`7aa4345cab92dd93bb44882b8aa0427c801a246a`、`65317432a93a74dfc3bafd8bff83a03eec5162e0`
 - 这些是诊断指标而非自动质量评分；边界边、多组件等情况需结合资产设计审阅。
 - 尚未在 Blender runtime 运行，也尚未把 Human Base Meshes 下载或导入当前环境。真实人体基底的拓扑、UV、材质和形变质量仍待实际验收。
+
+
+补充实现细节：边界边与非流形边现由 Blender `bmesh` 数据计算，避免依赖 MeshEdge 上不一定可用的属性。最终诊断脚本提交：`f81641c16140b1f510252c2de3fdba067f83fa8c`。
