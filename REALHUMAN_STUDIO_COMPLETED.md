@@ -367,3 +367,11 @@
 - UI 已增加保存/载入 JSON 入口；smoke test 增加多类别参数往返与错误 schema 不修改模型的用例。
 - 源码提交：961b49aa1ae8343e65468cef63fced0de9f98a4b；UI 提交：6f66466015830025871283983c7701b6bfccf8a1；测试提交：5a31c6c9cbd28f54787f7534c4fbebc18d542e20、da01fbacf5828520ddd67bc8d328a548d3ea650b。
 - **状态：功能与测试代码已提交，尚未由 Blender runtime/CI 实际执行。** 模板保存的是现有形态键参数，不会凭空生成缺少的面部、肌肉、脂肪、毛发或解剖模型。
+
+
+## 2026-10-18 补充：原生 Blender 资产导入
+
+- 资源导入支持 .blend：调用 bpy.data.libraries.load(link=False) 追加文件内对象，并链接到当前场景，随后沿用现有分类归档、来源路径和导入批次记录。
+- 导入器与资源重新关联文件选择器已支持 .blend；新增 smoke test 验证真实网格对象、类别、源路径和批次 ID。
+- 推荐使用 Blender 官方 Human Base Meshes v1.4.1 作为第一批真实人体基础网格候选（官方页面标注 CC0）。
+- **尚未运行 Blender smoke test。** 当前 .blend 操作会追加库文件里的所有对象，尚未实现单独选择集合/资产的 UI。
