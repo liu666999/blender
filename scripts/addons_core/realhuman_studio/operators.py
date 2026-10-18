@@ -2550,6 +2550,85 @@ class RH_OT_apply_body_silhouette_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_sync_character_shape_key_values(bpy.types.Operator):
+    bl_idname = "rh_studio.sync_character_shape_key_values"
+    bl_label = "同步角色标准形态参数"
+    bl_description = (
+        "Copy matching RealHuman Studio shape-key values from the active mesh to "
+        "classified character meshes; unmatched/custom keys remain untouched"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    _SUPPORTED_PREFIXES = (
+        "RH体型 | ", "RH脸型 | ", "RH肌肉 | ", "RH脂肪 | ", "RH毛发 | ",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and obj.data.shape_keys)
+
+    def execute(self, context):
+        source = context.active_object
+        source_keys = source.data.shape_keys.key_blocks
+        parameters = {
+            key.name: float(key.value)
+            for key in list(source_keys)[1:]
+            if key.name.startswith(self._SUPPORTED_PREFIXES)
+        }
+        if not parameters:
+            self.report(
+                {"ERROR"},
+                "活动网格没有 RH体型 / RH脸型 / RH肌肉 / RH脂肪 / RH毛发 标准形态键；未修改其他网格。",
+            )
+            return {"CANCELLED"}
+
+        targets = [
+            obj for obj in _character_layer_objects(context.scene)
+            if obj.type == "MESH" and obj.data.shape_keys is not None
+        ]
+        if source not in targets:
+            targets.append(source)
+
+        changed_objects = 0
+        changed_keys = 0
+        missing_keys = 0
+        seen_shape_keys = set()
+        for obj in targets:
+            shape_keys = obj.data.shape_keys
+            pointer = shape_keys.as_pointer()
+            if pointer in seen_shape_keys:
+                continue
+            seen_shape_keys.add(pointer)
+            key_blocks = shape_keys.key_blocks
+            object_changes = 0
+            for name, value in parameters.items():
+                key = key_blocks.get(name)
+                if key is None:
+                    missing_keys += 1
+                    continue
+                # The source mesh defines the requested parameter values, but
+                # each target retains its own legal slider range.
+                key.value = max(float(key.slider_min), min(float(key.slider_max), value))
+                changed_keys += 1
+                object_changes += 1
+            if object_changes:
+                changed_objects += 1
+
+        if not changed_keys:
+            self.report({"ERROR"}, "角色图层中没有可匹配的标准形态键；未修改模型。")
+            return {"CANCELLED"}
+
+        message = "已同步 %d 个网格数据块上的 %d 个标准形态参数。" % (
+            changed_objects, changed_keys)
+        if missing_keys:
+            message += " 缺少对应参数的目标共跳过 %d 项。" % missing_keys
+        message += " 未命名为 RH 标准前缀的自定义形态键不会被同步。"
+        self.report({"WARNING"} if missing_keys else {"INFO"}, message)
+        context.view_layer.update()
+        return {"FINISHED"}
+
+
 class RH_OT_reset_shape_keys(bpy.types.Operator):
     bl_idname = "rh_studio.reset_shape_keys"
     bl_label = "重置形态键"
@@ -4372,7 +4451,7 @@ CLASSES = (
     RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
     RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_enter_sculpt_mode, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_enter_sculpt_mode, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_sync_character_shape_key_values, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
