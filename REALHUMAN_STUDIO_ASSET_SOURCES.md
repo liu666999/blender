@@ -53,3 +53,12 @@ Use Blender Studio Human Base Meshes v1.4.1 as the CC0 base-body candidate and �
 - 官方镜像：https://mirror.blender.org/demo/asset-bundles/human-base-meshes/human-base-meshes-bundle-v1.4.1.zip
 - 注意：当前 .blend 导入会追加该文件中的所有对象，而不是弹出单个资产选择器。对于包含大量资产的库文件，建议先复制文件或使用单独的验证场景；后续可增加库内对象/集合选择。
 - 自动化测试已新增临时 .blend 资源写入、追加、分类及来源元数据检查；尚未在 Blender runtime 中执行。
+
+
+## 2026-10-18：按对象名选择导入的工作流更新
+
+RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游库文件只追加指定对象，避免每次都导入整个库；留空则保持全量导入。对象名不存在会显式报错。此功能已增加 smoke test，但尚未在 Blender runtime 验证。
+
+- 代码提交：fa4dec83bc7416295735a0c2ee3e03942efa076d
+- 测试提交：f014852a3d61bbe3ddac3d5d2a9eb2a567ae64d
+- 后续仍需真实资产验证依赖、集合归属、shape keys、UV、材质与许可；该功能不是资产本身，也不代表 Human Base Meshes 已导入项目。
