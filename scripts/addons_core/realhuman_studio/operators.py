@@ -217,15 +217,24 @@ def _select_imported_objects(context, imported):
         pass
 
 
-def _call_import_operator(filepath):
+def _call_import_operator(filepath, blend_object_names=""):
     extension = Path(filepath).suffix.lower()
     if extension == ".blend":
-        # Append actual Blender datablocks, enabling the official Human Base Meshes bundle.
+        # Append real datablocks. An empty selection means all objects; otherwise
+        # accept a comma-separated list of exact object names from the source file.
+        requested = [name.strip() for name in blend_object_names.split(",") if name.strip()]
         with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
-            object_names = list(data_from.objects)
-            if not object_names:
+            available = list(data_from.objects)
+            if not available:
                 raise RuntimeError("所选 .blend 文件没有可追加的对象。")
-            data_to.objects = object_names
+            if requested:
+                missing = [name for name in requested if name not in available]
+                if missing:
+                    raise RuntimeError("源文件中找不到这些对象：" + "、".join(missing))
+                selected_names = list(dict.fromkeys(requested))
+            else:
+                selected_names = available
+            data_to.objects = selected_names
         imported_objects = [obj for obj in data_to.objects if obj is not None]
         if not imported_objects:
             raise RuntimeError("从 .blend 文件追加对象失败。")
@@ -344,6 +353,17 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
     filename_ext = ""
     filter_glob: StringProperty(default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
     category: EnumProperty(name="分类", items=CATEGORY_ITEMS, default="BASE_BODY")
+    blend_object_names: StringProperty(
+        name="仅导入这些对象",
+        description="仅对 .blend 有效；填写源文件中的精确对象名，多个名称用英文逗号分隔；留空则导入全部对象",
+        default="",
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "category")
+        layout.prop(self, "blend_object_names")
+        layout.label(text="仅 .blend 生效；留空导入全部对象。名称必须与源文件完全一致。")
 
     def invoke(self, context, event):
         root = bpy.path.abspath(context.scene.rh_studio_library_root)
@@ -382,7 +402,7 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             and context.scene.collection.children.get(root_collection_before.name)
         )
         try:
-            _call_import_operator(filepath)
+            _call_import_operator(filepath, self.blend_object_names)
             imported = [obj for obj in bpy.data.objects if obj.as_pointer() not in before]
             if not imported:
                 # A nominally successful importer can still create materials,
