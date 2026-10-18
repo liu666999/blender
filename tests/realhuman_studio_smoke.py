@@ -833,6 +833,12 @@ def run():
                and project_audit.get("category_counts", {}).get("SKIN", 0) >= 1
                and "ORGANS" in project_audit.get("anatomy_readiness", {}).get("missing_categories", [])
                and project_audit.get("anatomy_readiness", {}).get("status") == "incomplete"
+               and project_audit.get("anatomy_readiness", {}).get("alignment_audit", {}).get("status") == "review_required"
+               and any(warning.get("type") == "reference_missing"
+                       for warning in project_audit.get("anatomy_readiness", {})
+                           .get("alignment_audit", {}).get("warnings", []))
+               and any(record.get("category") == "SKIN" and "world_bounds" in record
+                       for record in project_audit.get("objects", []))
                and project_audit.get("anatomy_readiness", {}).get("category_stats", {})
                    .get("SKIN", {}).get("meshes", 0) >= 1
                and any(record.get("source_url") == "https://example.org/scan-asset"
