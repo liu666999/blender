@@ -533,3 +533,8 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 
 
 补充：`tests/realhuman_studio_smoke.py` 已增加报告字段断言，检查缺少基础人体时会输出 `reference_missing`、分类对象包含 `world_bounds`。这些是测试代码变更，当前环境未运行 Blender，因此结果仍待实测。
+
+
+### 本轮新增：一次导入、多分类归档
+
+`导入模型到当前分类` 新增可选的“对象分类映射 JSON”。用户可以按源对象的精确名称把同一文件中的对象分配到不同分类，例如 `{"Body":"BASE_BODY","Skin":"SKIN","Muscles":"MUSCLES"}`；未列出的对象使用原先选定的默认分类。映射会校验 JSON 格式、对象名是否确实导入、分类 ID 是否有效；出错会进入现有导入回滚流程。导入历史会在多分类时标记为 `MIXED`，各对象仍保存各自分类元数据。代码提交：`2fef7a6`；测试断言提交：`4be0df9`。尚未运行 Blender smoke test。
