@@ -72,6 +72,106 @@ ensure(len(obj.data.vertices) >= 100,
 ensure(obj.data.shape_keys is None or len(obj.data.shape_keys.key_blocks) >= 1,
        "The mesh has an invalid shape-key datablock.")
 
+def topology_diagnostics(mesh):
+    """Measure mesh integrity without pretending to certify anatomical quality."""
+    vertex_count = len(mesh.vertices)
+    edge_count = len(mesh.edges)
+    polygon_count = len(mesh.polygons)
+    used_vertices = set()
+    parent = list(range(vertex_count))
+
+    def find(index):
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left, right):
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    for edge in mesh.edges:
+        left, right = edge.vertices
+        used_vertices.add(left)
+        used_vertices.add(right)
+        union(left, right)
+
+    component_roots = {find(index) for index in used_vertices}
+    zero_area_faces = [poly.index for poly in mesh.polygons if poly.area <= 1e-12]
+    polygons_without_material = []
+    used_material_indices = set()
+    for poly in mesh.polygons:
+        if poly.material_index < 0 or poly.material_index >= len(mesh.materials):
+            polygons_without_material.append(poly.index)
+        else:
+            used_material_indices.add(poly.material_index)
+
+    uv_layers = list(mesh.uv_layers)
+    uv_face_coverage = {}
+    for layer in uv_layers:
+        covered_faces = 0
+        for poly in mesh.polygons:
+            if poly.loop_total >= 3 and all(
+                    layer.data[loop_index].uv is not None for loop_index in poly.loop_indices):
+                covered_faces += 1
+        uv_face_coverage[layer.name] = {
+            "faces_with_uvs": covered_faces,
+            "faces_total": polygon_count,
+            "coverage_ratio": covered_faces / polygon_count if polygon_count else 0.0,
+        }
+
+    shape_key_ranges = []
+    if mesh.shape_keys:
+        for key in mesh.shape_keys.key_blocks:
+            shape_key_ranges.append({
+                "name": key.name,
+                "slider_min": float(key.slider_min),
+                "slider_max": float(key.slider_max),
+                "value": float(key.value),
+            })
+
+    warnings = []
+    if vertex_count == 0 or polygon_count == 0:
+        warnings.append("Mesh has no usable surface geometry.")
+    if zero_area_faces:
+        warnings.append("Mesh contains zero-area polygons.")
+    if edge_count and any(not edge.use_edge_sharp for edge in mesh.edges):
+        pass
+    if not uv_layers:
+        warnings.append("Mesh has no UV layer.")
+    if polygon_count and not used_material_indices:
+        warnings.append("No polygon references a valid material slot.")
+    if len(component_roots) > 1:
+        warnings.append("Mesh contains multiple disconnected vertex components; review whether intentional.")
+    return {
+        "vertices": vertex_count,
+        "edges": edge_count,
+        "polygons": polygon_count,
+        "connected_components": len(component_roots),
+        "loose_vertices": vertex_count - len(used_vertices),
+        "zero_area_polygon_count": len(zero_area_faces),
+        "zero_area_polygon_indices_sample": zero_area_faces[:100],
+        "uv_layer_count": len(uv_layers),
+        "uv_face_coverage": uv_face_coverage,
+        "material_slots": len(mesh.materials),
+        "material_slots_used_by_polygons": sorted(used_material_indices),
+        "polygons_with_invalid_material_index": len(polygons_without_material),
+        "shape_keys": shape_key_ranges,
+        "warnings": warnings,
+    }
+
+
+obj = bpy.context.active_object
+ensure(obj is not None and obj.type == "MESH",
+       "Select the full-body human mesh as the active object before running this script.")
+ensure(len(obj.data.vertices) >= 100,
+       "The active mesh has fewer than 100 vertices; select a real human mesh, not a primitive test object.")
+ensure(len(obj.data.polygons) > 0,
+       "The selected mesh has no polygons; select a surface mesh rather than an empty mesh object.")
+ensure(obj.data.shape_keys is None or len(obj.data.shape_keys.key_blocks) >= 1,
+       "The mesh has an invalid shape-key datablock.")
+
 result = bpy.ops.rh_studio.generate_body_proportion_keys()
 ensure("FINISHED" in result,
        "RealHuman Studio could not generate/update the body-proportion controls on this mesh.")
@@ -88,9 +188,7 @@ report = {
     "object": obj.name,
     "source_blend": bpy.data.filepath,
     "mesh": {
-        "vertices": len(obj.data.vertices),
-        "edges": len(obj.data.edges),
-        "polygons": len(obj.data.polygons),
+        "topology": topology_diagnostics(obj.data),
         "dimensions_object_units": [float(value) for value in obj.dimensions],
         "uv_layers": [layer.name for layer in obj.data.uv_layers],
         "materials": [slot.material.name if slot.material else None
@@ -104,6 +202,8 @@ report = {
     "warnings": [
         "Automated coordinate metrics do not judge anatomy, silhouette, volume preservation, or visual quality.",
         "Inspect the mesh at positive and negative slider values and check clothing intersections in the GUI.",
+        "Connected components and material/UV coverage are diagnostics only; multiple components may be intentional.",
+        "Topology warnings must be reviewed manually; they do not automatically mean the asset is unusable.",
         "If modifiers change evaluated topology, per-vertex comparison is rejected rather than guessed.",
     ],
 }
