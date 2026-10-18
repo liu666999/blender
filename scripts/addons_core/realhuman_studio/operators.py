@@ -2719,6 +2719,12 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
     weave_strength: FloatProperty(
         name="织物微纹理", description="Procedural fiber grain bump intensity",
         default=0.25, min=0.0, max=1.0, subtype="FACTOR")
+    dye_opacity: FloatProperty(
+        name="染料/油墨浓度", description="Controls how strongly dye or print covers the base textile",
+        default=1.0, min=0.0, max=1.0, subtype="FACTOR")
+    fiber_scale: FloatProperty(
+        name="纤维纹理尺度", description="Higher values create finer procedural textile grain",
+        default=240.0, min=20.0, max=1200.0, precision=1)
     rotation: FloatProperty(name="旋转（度）", default=0.0, min=-math.pi, max=math.pi, subtype="ANGLE")
     coordinate_source: EnumProperty(name="坐标来源", items=(
         ("UV", "UV 贴图", "Use the garment's UV map"),
@@ -2745,6 +2751,8 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         layout.prop(self, "sparsity", slider=True)
         layout.prop(self, "edge_bleed", slider=True)
         layout.prop(self, "weave_strength", slider=True)
+        layout.prop(self, "dye_opacity", slider=True)
+        layout.prop(self, "fiber_scale")
         layout.prop(self, "rotation")
         layout.prop(self, "coordinate_source")
         row = layout.row(align=True)
@@ -2830,7 +2838,12 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         mix.location = (150, 80)
         mix.blend_type = "MIX"
         # RGBA Mix sockets are typed and exposed by Blender 4.x/5.x.
-        links.new(edge_mask.outputs["Result"], mix.inputs[0])
+        opacity = nodes.new("ShaderNodeMath")
+        opacity.operation = "MULTIPLY"
+        opacity.location = (80, -20)
+        links.new(edge_mask.outputs["Result"], opacity.inputs[0])
+        opacity.inputs[1].default_value = self.dye_opacity
+        links.new(opacity.outputs[0], mix.inputs[0])
         mix.inputs[1].default_value = self.base_color
         mix.inputs[2].default_value = self.print_color
         links.new(mix.outputs[0], shader.inputs["Base Color"])
@@ -2840,7 +2853,7 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         # dye placement remain independent from the material's fiber texture.
         weave = nodes.new("ShaderNodeTexNoise")
         weave.location = (-600, -260)
-        weave.inputs["Scale"].default_value = 240.0
+        weave.inputs["Scale"].default_value = self.fiber_scale
         weave.inputs["Detail"].default_value = 2.0
         weave.inputs["Roughness"].default_value = 0.72
         links.new(texcoord.outputs[coordinate_socket], weave.inputs["Vector"])
@@ -2884,6 +2897,8 @@ class RH_OT_create_fabric_print(bpy.types.Operator):
         material["rh_studio_sparsity"] = self.sparsity
         material["rh_studio_edge_bleed"] = self.edge_bleed
         material["rh_studio_weave_strength"] = self.weave_strength
+        material["rh_studio_dye_opacity"] = self.dye_opacity
+        material["rh_studio_fiber_scale"] = self.fiber_scale
         material["rh_studio_rotation_degrees"] = self.rotation * 57.295779513
         material["rh_studio_coordinate_source"] = self.coordinate_source
         material["rh_studio_offset_x"] = self.offset_x
