@@ -22,7 +22,7 @@ CATEGORY_COLLECTIONS = {
     "TISSUE": "10 筋膜与其他组织", "CLOTHING": "11 服装",
     "RIG": "12 骨架绑定", "OTHER": "13 其他资源",
 }
-SUPPORTED_IMPORTS = {".obj", ".fbx", ".glb", ".gltf", ".stl", ".ply"}
+SUPPORTED_IMPORTS = {".blend", ".obj", ".fbx", ".glb", ".gltf", ".stl", ".ply"}
 
 # Region mask width is expressed as a fraction of the mesh's local Z height.
 # These are deliberately coarse starting masks; artists can refine the weights.
@@ -219,6 +219,20 @@ def _select_imported_objects(context, imported):
 
 def _call_import_operator(filepath):
     extension = Path(filepath).suffix.lower()
+    if extension == ".blend":
+        # Append actual Blender datablocks, enabling the official Human Base Meshes bundle.
+        with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+            object_names = list(data_from.objects)
+            if not object_names:
+                raise RuntimeError("所选 .blend 文件没有可追加的对象。")
+            data_to.objects = object_names
+        imported_objects = [obj for obj in data_to.objects if obj is not None]
+        if not imported_objects:
+            raise RuntimeError("从 .blend 文件追加对象失败。")
+        for obj in imported_objects:
+            if obj.name not in bpy.context.scene.objects:
+                bpy.context.scene.collection.objects.link(obj)
+        return {"FINISHED"}
     candidates = {
         ".obj": (("wm", "obj_import"), ("import_scene", "obj")),
         ".fbx": (("import_scene", "fbx"),),
@@ -328,7 +342,7 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
     bl_description = "Import a mesh/rig file and place its objects into the selected category"
     bl_options = {"REGISTER", "UNDO"}
     filename_ext = ""
-    filter_glob: StringProperty(default="*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+    filter_glob: StringProperty(default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
     category: EnumProperty(name="分类", items=CATEGORY_ITEMS, default="BASE_BODY")
 
     def invoke(self, context, event):
@@ -344,7 +358,7 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             self.report({"ERROR"}, "请先选择一个真实存在的模型文件。")
             return {"CANCELLED"}
         if Path(filepath).suffix.lower() not in SUPPORTED_IMPORTS:
-            self.report({"ERROR"}, "格式不支持。支持 OBJ、FBX、GLB、GLTF、STL、PLY。")
+            self.report({"ERROR"}, "格式不支持。支持 BLEND、OBJ、FBX、GLB、GLTF、STL、PLY。")
             return {"CANCELLED"}
         import_datablocks = {
             "objects": bpy.data.objects,
@@ -1222,7 +1236,7 @@ class RH_OT_relink_asset_source(bpy.types.Operator):
             return {"CANCELLED"}
         extension = Path(filepath).suffix.lower()
         if extension not in SUPPORTED_IMPORTS:
-            self.report({"ERROR"}, "格式不支持。请选择 OBJ、FBX、GLB、GLTF、STL 或 PLY 文件。")
+            self.report({"ERROR"}, "格式不支持。请选择 BLEND、OBJ、FBX、GLB、GLTF、STL 或 PLY 文件。")
             return {"CANCELLED"}
 
         old_paths = [str(obj.get("rh_studio_source_path", "")) for obj in selected]
