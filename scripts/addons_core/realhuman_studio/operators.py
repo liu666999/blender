@@ -161,7 +161,8 @@ def _write_json_atomic(filepath, payload):
             os.remove(temp_path)
 
 
-def record_project_import(scene, filepath, category, objects, batch_id, imported_at):
+def record_project_import(scene, filepath, category, objects, batch_id, imported_at,
+                          source_url="", license_name="", attribution=""):
     """Append one successful import batch to an existing project manifest.
 
     A missing project manifest is not an error: per-object metadata is still
@@ -192,6 +193,10 @@ def record_project_import(scene, filepath, category, objects, batch_id, imported
             "source_mtime": datetime.fromtimestamp(
                 source_stat.st_mtime).astimezone().isoformat(timespec="seconds"),
             "category": category,
+            "source_url": source_url.strip(),
+            "license": license_name.strip() or "UNVERIFIED",
+            "license_status": "user_supplied" if license_name.strip() else "unverified",
+            "attribution": attribution.strip(),
             "object_count": len(objects),
             "objects": [{"name": obj.name, "type": obj.type} for obj in objects],
         }
@@ -358,12 +363,21 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
         description="仅对 .blend 有效；填写源文件中的精确对象名，多个名称用英文逗号分隔；留空则导入全部对象",
         default="",
     )
+    source_url: StringProperty(name="来源网址", description="上游资产页面或下载地址", default="")
+    license_name: StringProperty(name="许可证", description="填写已核实的许可证；不确定时留空并标记未核实", default="")
+    attribution: StringProperty(name="署名 / 许可声明", description="按上游要求填写作者与再分发条件", default="")
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "category")
         layout.prop(self, "blend_object_names")
         layout.label(text="仅 .blend 生效；留空导入全部对象。名称必须与源文件完全一致。")
+        box = layout.box()
+        box.label(text="资源来源与许可记录")
+        box.prop(self, "source_url")
+        box.prop(self, "license_name")
+        box.prop(self, "attribution")
+        box.label(text="许可证不会自动核验；未填写时记录为 UNVERIFIED。")
 
     def invoke(self, context, event):
         root = bpy.path.abspath(context.scene.rh_studio_library_root)
@@ -416,8 +430,14 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             for obj in imported:
                 obj["rh_studio_import_batch_id"] = batch_id
                 obj["rh_studio_imported_at"] = imported_at
+                obj["rh_studio_source_url"] = self.source_url.strip()
+                obj["rh_studio_license"] = self.license_name.strip() or "UNVERIFIED"
+                obj["rh_studio_license_status"] = (
+                    "user_supplied" if self.license_name.strip() else "unverified")
+                obj["rh_studio_attribution"] = self.attribution.strip()
             history_saved, history_message = record_project_import(
-                context.scene, filepath, self.category, imported, batch_id, imported_at)
+                context.scene, filepath, self.category, imported, batch_id, imported_at,
+                self.source_url, self.license_name, self.attribution)
         except Exception as exc:
             # Importers may create several datablocks before raising. Remove every
             # object created during this transaction so a failed import does not
