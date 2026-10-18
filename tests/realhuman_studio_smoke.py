@@ -72,6 +72,26 @@ def run():
            "One or more anatomical layer categories are missing from the import selector.")
     ensure(required_anatomy_categories.issubset(rh_operators.CATEGORY_COLLECTIONS),
            "One or more anatomical layer categories lack a collection mapping.")
+    # Asset intake may map objects from one source file into distinct anatomy layers.
+    fallback_map = rh_operators.parse_import_category_map("", ["Body", "Skin"], "BASE_BODY")
+    ensure(fallback_map == {"Body": "BASE_BODY", "Skin": "BASE_BODY"},
+           "Empty per-object category mapping must preserve the selected default category.")
+    mapped = rh_operators.parse_import_category_map(
+        '{"Body":"BASE_BODY","Skin":"SKIN"}', ["Body", "Skin", "Extra"], "OTHER")
+    ensure(mapped == {"Body": "BASE_BODY", "Skin": "SKIN", "Extra": "OTHER"},
+           "Per-object mapping did not preserve explicit categories and fallback behavior.")
+    for invalid_mapping in (
+            ('{"Missing":"SKIN"}', ["Body"], "BASE_BODY"),
+            ('{"Skin":"NOT_A_CATEGORY"}', ["Skin"], "BASE_BODY"),
+            ('["SKIN"]', ["Skin"], "BASE_BODY"),
+            ('{bad json}', ["Skin"], "BASE_BODY")):
+        try:
+            rh_operators.parse_import_category_map(*invalid_mapping)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid per-object category mapping was accepted: %r" %
+                                 (invalid_mapping[0],))
     # Result viewer filtering and validation are pure helpers, so exercise them in background CI.
     sample_results = [
         {"object_name": "A", "status": "repaired"},
