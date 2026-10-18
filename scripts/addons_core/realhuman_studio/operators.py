@@ -1388,12 +1388,22 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
             "objects": len(objects), "missing_source_files": 0,
             "missing_armature_targets": 0, "missing_uvs": 0,
             "missing_materials": 0, "suspicious_dimensions": 0,
-            "missing_import_batch_ids": 0,
+            "missing_import_batch_ids": 0, "unverified_asset_licenses": 0,
         }
+        category_counts = {}
 
         for obj in objects:
             warnings = []
+            category = str(obj.get("rh_studio_category", "UNASSIGNED") or "UNASSIGNED")
+            category_counts[category] = category_counts.get(category, 0) + 1
+            source_url = str(obj.get("rh_studio_source_url", ""))
+            license_name = str(obj.get("rh_studio_license", "UNVERIFIED") or "UNVERIFIED")
+            license_status = str(obj.get("rh_studio_license_status", "unverified") or "unverified")
+            attribution = str(obj.get("rh_studio_attribution", ""))
             source_path = str(obj.get("rh_studio_source_path", ""))
+            if (source_path or category != "UNASSIGNED" or source_url) and license_status != "verified":
+                warnings.append("资源许可证尚未经过独立核验")
+                counts["unverified_asset_licenses"] += 1
             if source_path and not os.path.isfile(bpy.path.abspath(source_path)):
                 warnings.append("原始资源文件不存在或路径已失效")
                 counts["missing_source_files"] += 1
@@ -1445,10 +1455,14 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
 
             records.append({
                 "name": obj.name, "type": obj.type,
-                "category": obj.get("rh_studio_category", "UNASSIGNED"),
+                "category": category,
                 "source_path": source_path,
                 "source_path_exists": bool(source_path and os.path.isfile(
                     bpy.path.abspath(source_path))),
+                "source_url": source_url,
+                "license": license_name,
+                "license_status": license_status,
+                "attribution": attribution,
                 "import_batch_id": obj.get("rh_studio_import_batch_id", ""),
                 "imported_at": obj.get("rh_studio_imported_at", ""),
                 "dimensions_world": [
@@ -1511,6 +1525,7 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
             "meters_per_blender_unit": unit_scale if valid_scale else None,
             "project_history": history,
             "summary": counts,
+            "category_counts": dict(sorted(category_counts.items())),
             "object_count": len(records),
             "objects": records,
         }
