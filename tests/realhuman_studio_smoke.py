@@ -831,6 +831,10 @@ def run():
                and project_audit.get("object_count", 0) >= 1
                and project_audit.get("summary", {}).get("unverified_asset_licenses", 0) >= 1
                and project_audit.get("category_counts", {}).get("SKIN", 0) >= 1
+               and "ORGANS" in project_audit.get("anatomy_readiness", {}).get("missing_categories", [])
+               and project_audit.get("anatomy_readiness", {}).get("status") == "incomplete"
+               and project_audit.get("anatomy_readiness", {}).get("category_stats", {})
+                   .get("SKIN", {}).get("meshes", 0) >= 1
                and any(record.get("source_url") == "https://example.org/scan-asset"
                        and record.get("license") == "CC0"
                        and record.get("license_status") == "user_supplied"
