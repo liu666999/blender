@@ -342,7 +342,7 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
     bl_description = "Import a mesh/rig file and place its objects into the selected category"
     bl_options = {"REGISTER", "UNDO"}
     filename_ext = ""
-    filter_glob: StringProperty(default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+    filter_glob: StringProperty(default="*.blend;*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
     category: EnumProperty(name="分类", items=CATEGORY_ITEMS, default="BASE_BODY")
 
     def invoke(self, context, event):
@@ -584,7 +584,7 @@ class RH_OT_scan_missing_sources(bpy.types.Operator):
 
     directory: StringProperty(name="搜索目录", subtype="DIR_PATH")
     filepath: StringProperty(name="候选报告", subtype="FILE_PATH", default="//logs/missing_source_candidates.json")
-    filter_glob: StringProperty(default="*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+    filter_glob: StringProperty(default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
 
     def invoke(self, context, event):
         root = bpy.path.abspath(context.scene.rh_studio_project_root or "//")
@@ -1203,7 +1203,7 @@ class RH_OT_relink_asset_source(bpy.types.Operator):
 
     filepath: StringProperty(name="原始资源文件", subtype="FILE_PATH")
     filter_glob: StringProperty(
-        default="*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+        default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
 
     @classmethod
     def poll(cls, context):
