@@ -1384,6 +1384,7 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
         unit_scale = float(scene.unit_settings.scale_length or 1.0)
         valid_scale = math.isfinite(unit_scale) and unit_scale > 0.0
         records = []
+        anatomy_category_stats = {}
         counts = {
             "objects": len(objects), "missing_source_files": 0,
             "missing_armature_targets": 0, "missing_uvs": 0,
@@ -1396,6 +1397,12 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
             warnings = []
             category = str(obj.get("rh_studio_category", "UNASSIGNED") or "UNASSIGNED")
             category_counts[category] = category_counts.get(category, 0) + 1
+            category_stat = anatomy_category_stats.setdefault(category, {
+                "objects": 0, "meshes": 0, "vertices": 0, "polygons": 0,
+                "meshes_with_uvs": 0, "meshes_with_materials": 0,
+                "meshes_with_shape_keys": 0,
+            })
+            category_stat["objects"] += 1
             source_url = str(obj.get("rh_studio_source_url", ""))
             license_name = str(obj.get("rh_studio_license", "UNVERIFIED") or "UNVERIFIED")
             license_status = str(obj.get("rh_studio_license_status", "unverified") or "unverified")
@@ -1446,6 +1453,15 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
                     "shape_keys": [key.name for key in obj.data.shape_keys.key_blocks]
                                   if obj.data.shape_keys else [],
                 }
+                category_stat["meshes"] += 1
+                category_stat["vertices"] += len(obj.data.vertices)
+                category_stat["polygons"] += len(obj.data.polygons)
+                if uv_count:
+                    category_stat["meshes_with_uvs"] += 1
+                if material_count:
+                    category_stat["meshes_with_materials"] += 1
+                if obj.data.shape_keys and len(obj.data.shape_keys.key_blocks) > 1:
+                    category_stat["meshes_with_shape_keys"] += 1
                 if obj.data.polygons and not uv_count:
                     warnings.append("网格没有 UV 图层")
                     counts["missing_uvs"] += 1
@@ -1516,6 +1532,22 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
         else:
             history["warnings"].append("未找到 realhuman_project.json；未执行导入历史交叉检查")
 
+        required_anatomy_categories = [
+            "BASE_BODY", "SKIN", "FAT", "BONES", "MUSCLES",
+            "NERVES", "VESSELS", "ORGANS", "HAIR", "TISSUE",
+        ]
+        missing_anatomy_categories = [
+            category for category in required_anatomy_categories
+            if anatomy_category_stats.get(category, {}).get("objects", 0) == 0
+        ]
+        anatomy_readiness = {
+            "status": "incomplete" if missing_anatomy_categories else "categories_present",
+            "note": "分类存在不代表解剖内容正确或彼此对齐；需人工检查网格、比例、拓扑和层间对应关系。",
+            "required_categories": required_anatomy_categories,
+            "missing_categories": missing_anatomy_categories,
+            "category_stats": dict(sorted(anatomy_category_stats.items())),
+        }
+
         payload = {
             "schema": "realhuman_studio_project_integrity_v1",
             "application": "RealHuman Studio",
@@ -1526,6 +1558,7 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
             "project_history": history,
             "summary": counts,
             "category_counts": dict(sorted(category_counts.items())),
+            "anatomy_readiness": anatomy_readiness,
             "object_count": len(records),
             "objects": records,
         }
