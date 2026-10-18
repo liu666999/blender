@@ -498,3 +498,12 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 状态：已写入代码与 smoke test；未在 Blender runtime 执行，不能声称测试已通过。
 
 补充修正：项目审计测试夹具顺序已修复，许可元数据现在在触发审计前设置于已存在的测试对象上，避免读取尚未生成的报告或引用后续才创建的对象。修正测试提交：`7cf7abd54be3f8133befdf942600a56571524190`。仍未执行 Blender runtime。
+
+
+## 2026-10-18 继续开发：解剖分层完备度审计
+
+项目完整性报告新增 `anatomy_readiness`：检查 `BASE_BODY`、`SKIN`、`FAT`、`BONES`、`MUSCLES`、`NERVES`、`VESSELS`、`ORGANS`、`HAIR`、`TISSUE` 十类是否至少有对象；按分类统计对象数、网格数、顶点/面数、带 UV 的网格数、带材质的网格数和带形态键的网格数。报告会列出缺失分类，并明确提醒“分类存在不代表解剖内容正确或层间对齐”。
+
+- 代码：`d917340cf2670a7cad0015149b19a57294d8ffb8`
+- 测试：`d81bd7d9c6d5b5f32f9990c1fd3f46646699e15d`
+- 尚未运行 Blender runtime。
