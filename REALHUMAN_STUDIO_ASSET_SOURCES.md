@@ -130,3 +130,10 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 4. 根据真实对象名称配置 RealHuman Studio 导入器的精确对象筛选和 `category_map_json`，不要凭示例名称猜测。
 
 该脚本只读取 `bpy.data.libraries.load` 的 `data_from` 名称，不将资产追加到场景、不修改源文件，也不判定模型解剖质量。提交：`fcd2044bfe6926b0958de9dccb58641aa2646344`。尚未在 Blender runtime 执行。
+
+
+### 资产清点结果中的分类建议字段
+
+`tests/realhuman_studio_asset_inventory.py` 会为每个源对象名称生成 `category_suggestions`。单一关键词命中只作为建议；多个命中会标为歧义；没有命中则留待人工分类。此规则仅依赖名称，不读取几何结构，也不证明对象的实际解剖含义。请在检查原始资产和授权信息后人工确认，再把精确名称写入导入器的分类映射 JSON。
+
+代码提交：`5000d7449a06c7d6f03f2fb8a7c833638be4c142`。尚未用真实资源包运行验证。
