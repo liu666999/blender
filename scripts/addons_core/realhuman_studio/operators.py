@@ -342,7 +342,7 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
     bl_description = "Import a mesh/rig file and place its objects into the selected category"
     bl_options = {"REGISTER", "UNDO"}
     filename_ext = ""
-    filter_glob: StringProperty(default="*.blend;*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
+    filter_glob: StringProperty(default="*.blend;*.obj;*.fbx;*.glb;*.gltf;*.stl;*.ply", options={"HIDDEN"})
     category: EnumProperty(name="分类", items=CATEGORY_ITEMS, default="BASE_BODY")
 
     def invoke(self, context, event):
