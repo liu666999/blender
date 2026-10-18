@@ -459,3 +459,13 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 已新增 smoke test：四类不同参数的保存/载入往返，以及错误 schema 安全拒绝。
 - 提交：operators 961b49aa1ae8343e65468cef63fced0de9f98a4b；UI 6f66466015830025871283983c7701b6bfccf8a1；tests 5a31c6c9cbd28f54787f7534c4fbebc18d542e20、da01fbacf5828520ddd67bc8d328a548d3ea650b。
 - **尚未获得 Blender runtime/CI 结果。** 这让已有形态参数可以被保存和复用，但完整男女身体、五官、肌肉脂肪、毛发与分层解剖资产仍需独立实现/集成及真实网格验证。
+
+
+## 2026-10-18 续开发：打通官方人体资产的原生导入入口
+
+- 新增 .blend 原生资源导入：使用 bpy.data.libraries.load(link=False) 追加真实 Blender 对象，链接到当前场景，并继续使用原有分类集合、源文件路径、批次 ID 与导入历史记录。
+- 更新通用资源导入/重新关联的文件选择器过滤器，加入 .blend。
+- 新增 smoke test：生成临时 .blend 资源，移除原对象后经插件导入，再检查网格对象、类别、来源路径和导入批次元数据。
+- 实现提交：649226b5acdc5e89e84a530060f4b493e060b44e；测试提交：48cb0b0fe8a2048498f6ac30aac64ff95057cda6；文件过滤修正：1157ff40faa42de581ad23d9453b1326aa87ae8f、5ac1976616ff830c18582bacc6e450d2be21a17e。
+- 真实资产首选验证源：Blender 官方 Human Base Meshes v1.4.1，官方 listing 标注 CC0；链接与版本已记入 REALHUMAN_STUDIO_ASSET_SOURCES.md。
+- **限制/未验证：** 当前会追加选定 .blend 文件中的所有对象；尚无单个资产/集合选择 UI。测试代码已提交，但本轮没有可用的 Blender 可执行程序，因此没有声称运行通过。
