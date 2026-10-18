@@ -2550,6 +2550,114 @@ class RH_OT_apply_body_silhouette_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class RH_OT_export_body_template(bpy.types.Operator, ExportHelper):
+    bl_idname = "rh_studio.export_body_template"
+    bl_label = "导出人体模板"
+    bl_description = "Save reusable RealHuman Studio shape-key values to a JSON body template"
+    bl_options = {"REGISTER"}
+
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and obj.data.shape_keys)
+
+    def execute(self, context):
+        obj = context.active_object
+        keys = obj.data.shape_keys.key_blocks
+        values = {
+            key.name: float(key.value)
+            for key in list(keys)[1:]
+            if key.name.startswith(("RH体型 | ", "RH脸型 | ", "RH肌肉 | ",
+                                    "RH脂肪 | ", "RH毛发 | "))
+        }
+        if not values:
+            self.report({"ERROR"}, "当前网格没有 RH 标准形态键；未导出空模板。")
+            return {"CANCELLED"}
+        template = {
+            "schema": "realhuman_studio_body_template_v1",
+            "source_object": obj.name,
+            "source_dimensions": [float(value) for value in obj.dimensions],
+            "shape_key_values": values,
+        }
+        path = Path(bpy.path.abspath(self.filepath))
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_name(path.name + ".tmp")
+            temporary.write_text(json.dumps(template, ensure_ascii=False, indent=2) + "\\n",
+                                 encoding="utf-8")
+            os.replace(str(temporary), str(path))
+        except (OSError, TypeError, ValueError) as exc:
+            try:
+                if "temporary" in locals() and temporary.exists():
+                    temporary.unlink()
+            except OSError:
+                pass
+            self.report({"ERROR"}, "人体模板导出失败：" + str(exc))
+            return {"CANCELLED"}
+        self.report({"INFO"}, "已导出 %d 个标准形态参数：%s" % (len(values), path))
+        return {"FINISHED"}
+
+
+class RH_OT_import_body_template(bpy.types.Operator, ImportHelper):
+    bl_idname = "rh_studio.import_body_template"
+    bl_label = "载入人体模板"
+    bl_description = "Apply matching shape-key values from a saved RealHuman Studio JSON template"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return bool(obj and obj.type == "MESH" and obj.data.shape_keys)
+
+    def execute(self, context):
+        obj = context.active_object
+        path = Path(bpy.path.abspath(self.filepath))
+        try:
+            template = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            self.report({"ERROR"}, "人体模板读取失败：" + str(exc))
+            return {"CANCELLED"}
+        if not isinstance(template, dict) or template.get("schema") != "realhuman_studio_body_template_v1":
+            self.report({"ERROR"}, "文件不是受支持的 RealHuman Studio 人体模板；未修改模型。")
+            return {"CANCELLED"}
+        values = template.get("shape_key_values")
+        if not isinstance(values, dict) or not values:
+            self.report({"ERROR"}, "人体模板没有有效的形态参数；未修改模型。")
+            return {"CANCELLED"}
+        keys = obj.data.shape_keys.key_blocks
+        applicable = []
+        for name, value in values.items():
+            if not isinstance(name, str) or not name.startswith(
+                    ("RH体型 | ", "RH脸型 | ", "RH肌肉 | ", "RH脂肪 | ", "RH毛发 | ")):
+                continue
+            key = keys.get(name)
+            if key is None:
+                continue
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                self.report({"ERROR"}, "模板参数 %s 不是有效数值；未修改模型。" % name)
+                return {"CANCELLED"}
+            if not math.isfinite(numeric):
+                self.report({"ERROR"}, "模板参数 %s 不是有限数值；未修改模型。" % name)
+                return {"CANCELLED"}
+            applicable.append((key, numeric))
+        if not applicable:
+            self.report({"ERROR"}, "当前网格没有与模板匹配的标准形态键；未修改模型。")
+            return {"CANCELLED"}
+        for key, numeric in applicable:
+            key.value = max(float(key.slider_min), min(float(key.slider_max), numeric))
+        context.view_layer.update()
+        self.report({"INFO"}, "已载入人体模板：更新 %d 个匹配形态参数，未匹配参数已跳过。" % len(applicable))
+        return {"FINISHED"}
+
+
 class RH_OT_sync_character_shape_key_values(bpy.types.Operator):
     bl_idname = "rh_studio.sync_character_shape_key_values"
     bl_label = "同步角色标准形态参数"
@@ -4466,7 +4574,7 @@ CLASSES = (
     RH_OT_export_asset_manifest, RH_OT_scan_missing_sources, RH_OT_apply_missing_source_repairs,
     RH_OT_view_missing_source_repair_results, RH_OT_copy_repair_result_path, RH_OT_relink_asset_source, RH_OT_audit_project_assets, RH_OT_audit_selected_assets, RH_OT_diagnose_asset_scale, RH_OT_normalize_selected_assets,
     RH_OT_assign_category, RH_OT_toggle_category, RH_OT_select_category,
-    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_enter_sculpt_mode, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_sync_character_shape_key_values, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
+    RH_OT_fit_height, RH_OT_fit_selected_group_height, RH_OT_create_character_root, RH_OT_fit_character_root_height, RH_OT_enter_sculpt_mode, RH_OT_generate_body_proportion_keys, RH_OT_create_body_proportion_masks, RH_OT_apply_body_silhouette_preset, RH_OT_export_body_template, RH_OT_import_body_template, RH_OT_sync_character_shape_key_values, RH_OT_reset_shape_keys, RH_OT_set_view, RH_OT_export_model,
     RH_OT_create_fabric_print, RH_OT_generate_simple_rig,
     RH_OT_apply_pose_preset, RH_OT_adjust_active_bone, RH_OT_toggle_pose_mode,
     RH_OT_insert_pose_keyframe, RH_OT_expression_preset,
