@@ -118,3 +118,15 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 ## 多分类导入工作流补充
 
 导入器现支持可选的对象名称到分类 JSON 映射，因此一个 `.blend` 或其他支持格式中若包含多个独立对象，可以分别归入基础人体、皮肤、肌肉等分类。映射按对象精确名称匹配；未映射对象使用默认分类。当前没有确认 Human Base Meshes v1.4.1 包内具体对象名称，因此示例名称只是格式示范，需在实际下载后核对。功能代码已提交，Blender 实测仍待完成。
+
+
+## 2026-10-18：新增 .blend 资产库无损清点流程
+
+新增 `tests/realhuman_studio_asset_inventory.py`，用于在 Blender 中检查解压后 `.blend` 资产库的实际数据块命名。使用方法：
+
+1. 在脚本顶部把 `SOURCE_BLEND` 设置为真实 `.blend` 文件的绝对路径（不是 ZIP 压缩包路径）。
+2. 在 Blender Text Editor 运行脚本。
+3. 检查源文件旁生成的 `realhuman_studio_asset_inventory.json`，其中列出对象、集合、网格、骨架、材质、图片、动作、曲线名称与数量。
+4. 根据真实对象名称配置 RealHuman Studio 导入器的精确对象筛选和 `category_map_json`，不要凭示例名称猜测。
+
+该脚本只读取 `bpy.data.libraries.load` 的 `data_from` 名称，不将资产追加到场景、不修改源文件，也不判定模型解剖质量。提交：`fcd2044bfe6926b0958de9dccb58641aa2646344`。尚未在 Blender runtime 执行。
