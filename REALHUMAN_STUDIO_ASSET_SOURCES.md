@@ -80,3 +80,5 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 - 代码提交：`0de7e098a412b4405ab074c1e8da5a0b66547278`
 - 测试提交：`5310621ae05bff4d75f6a008e8421306299c72bf`
 - 尚未在 Blender runtime 执行。
+
+测试夹具后续修正：在项目审计开始前给已存在对象设置许可元数据，修正测试提交 `7cf7abd54be3f8133befdf942600a56571524190`。Blender runtime 尚未验证。
