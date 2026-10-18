@@ -99,6 +99,8 @@ def topology_diagnostics(mesh):
 
     component_roots = {find(index) for index in used_vertices}
     zero_area_faces = [poly.index for poly in mesh.polygons if poly.area <= 1e-12]
+    boundary_edges = sum(1 for edge in mesh.edges if getattr(edge, "is_boundary", False))
+    non_manifold_edges = sum(1 for edge in mesh.edges if not getattr(edge, "is_manifold", True))
     polygons_without_material = []
     used_material_indices = set()
     for poly in mesh.polygons:
@@ -136,8 +138,6 @@ def topology_diagnostics(mesh):
         warnings.append("Mesh has no usable surface geometry.")
     if zero_area_faces:
         warnings.append("Mesh contains zero-area polygons.")
-    if edge_count and any(not edge.use_edge_sharp for edge in mesh.edges):
-        pass
     if not uv_layers:
         warnings.append("Mesh has no UV layer.")
     if polygon_count and not used_material_indices:
@@ -150,6 +150,8 @@ def topology_diagnostics(mesh):
         "polygons": polygon_count,
         "connected_components": len(component_roots),
         "loose_vertices": vertex_count - len(used_vertices),
+        "boundary_edges": boundary_edges,
+        "non_manifold_edges": non_manifold_edges,
         "zero_area_polygon_count": len(zero_area_faces),
         "zero_area_polygon_indices_sample": zero_area_faces[:100],
         "uv_layer_count": len(uv_layers),
