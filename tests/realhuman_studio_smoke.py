@@ -147,11 +147,19 @@ def run():
         result = bpy.ops.rh_studio.import_asset(
             filepath=blend_path, category="BASE_BODY",
             blend_object_names="RH CI Appended Library Sphere",
+            source_url="https://example.org/human-asset",
+            license_name="CC0",
+            attribution="Test attribution",
         )
         ensure("FINISHED" in result, "Selective .blend library import failed.")
         appended = bpy.data.objects.get("RH CI Appended Library Sphere")
         ensure(appended is not None and appended.type == "MESH",
                ".blend import did not append the specifically requested mesh object.")
+        ensure(appended.get("rh_studio_source_url") == "https://example.org/human-asset"
+               and appended.get("rh_studio_license") == "CC0"
+               and appended.get("rh_studio_license_status") == "user_supplied"
+               and appended.get("rh_studio_attribution") == "Test attribution",
+               "Import should store the supplied source URL, license and attribution on objects.")
         ensure(bpy.data.objects.get("RH CI Unselected Library Cube") is None,
                ".blend import should not append unrequested objects in selective mode.")
         ensure(appended.get("rh_studio_category") == "BASE_BODY"
