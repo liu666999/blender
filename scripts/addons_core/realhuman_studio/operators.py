@@ -1385,6 +1385,10 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
         valid_scale = math.isfinite(unit_scale) and unit_scale > 0.0
         records = []
         anatomy_category_stats = {}
+        required_anatomy_categories = [
+            "BASE_BODY", "SKIN", "FAT", "BONES", "MUSCLES",
+            "NERVES", "VESSELS", "ORGANS", "HAIR", "TISSUE",
+        ]
         counts = {
             "objects": len(objects), "missing_source_files": 0,
             "missing_armature_targets": 0, "missing_uvs": 0,
