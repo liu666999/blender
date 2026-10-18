@@ -1392,6 +1392,8 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
             "missing_import_batch_ids": 0, "unverified_asset_licenses": 0,
         }
         category_counts = {}
+        anatomy_world_bounds = {}
+        anatomy_object_transforms = []
 
         for obj in objects:
             warnings = []
@@ -1469,8 +1471,35 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
                     warnings.append("网格没有已分配材质")
                     counts["missing_materials"] += 1
 
+            world_corners = []
+            if obj.type == "MESH" and len(obj.data.vertices):
+                try:
+                    world_corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+                except (ValueError, TypeError, ReferenceError):
+                    world_corners = []
+            bounds_record = None
+            if world_corners and all(math.isfinite(float(v)) for p in world_corners for v in p):
+                mins = [min(float(p[axis]) for p in world_corners) for axis in range(3)]
+                maxs = [max(float(p[axis]) for p in world_corners) for axis in range(3)]
+                bounds_record = {"min": mins, "max": maxs}
+                if category in required_anatomy_categories:
+                    aggregate = anatomy_world_bounds.setdefault(category, {
+                        "min": list(mins), "max": list(maxs), "mesh_objects": 0})
+                    aggregate["min"] = [min(aggregate["min"][axis], mins[axis]) for axis in range(3)]
+                    aggregate["max"] = [max(aggregate["max"][axis], maxs[axis]) for axis in range(3)]
+                    aggregate["mesh_objects"] += 1
+            if category in required_anatomy_categories:
+                scale_values = [float(v) for v in obj.scale]
+                anatomy_object_transforms.append({
+                    "name": obj.name, "category": category,
+                    "location": [float(v) if math.isfinite(float(v)) else None for v in obj.location],
+                    "rotation_euler": [float(v) if math.isfinite(float(v)) else None for v in obj.rotation_euler],
+                    "scale": [v if math.isfinite(v) else None for v in scale_values],
+                    "non_uniform_scale": (max(scale_values) - min(scale_values)) > 1e-4,
+                })
+
             records.append({
-                "name": obj.name, "type": obj.type,
+                "name": obj.name, "type": obj.type, "world_bounds": bounds_record,
                 "category": category,
                 "source_path": source_path,
                 "source_path_exists": bool(source_path and os.path.isfile(
@@ -1540,12 +1569,53 @@ class RH_OT_audit_project_assets(bpy.types.Operator):
             category for category in required_anatomy_categories
             if anatomy_category_stats.get(category, {}).get("objects", 0) == 0
         ]
+        alignment_warnings = []
+        base_bounds = anatomy_world_bounds.get("BASE_BODY")
+        if base_bounds:
+            base_extent = [base_bounds["max"][axis] - base_bounds["min"][axis] for axis in range(3)]
+            base_center = [(base_bounds["max"][axis] + base_bounds["min"][axis]) * 0.5 for axis in range(3)]
+            for category, bounds in sorted(anatomy_world_bounds.items()):
+                if category == "BASE_BODY":
+                    continue
+                extent = [bounds["max"][axis] - bounds["min"][axis] for axis in range(3)]
+                center = [(bounds["max"][axis] + bounds["min"][axis]) * 0.5 for axis in range(3)]
+                for axis, axis_name in enumerate(("X", "Y", "Z")):
+                    if base_extent[axis] > 1e-6 and extent[axis] > base_extent[axis] * 1.5:
+                        alignment_warnings.append({
+                            "category": category, "type": "extent_outlier",
+                            "axis": axis_name, "message": "%s 分类包围盒在 %s 轴上超过基础人体的 1.5 倍；请检查单位、缩放或是否混入无关对象。" % (category, axis_name),
+                            "base_extent": base_extent[axis], "category_extent": extent[axis],
+                        })
+                    if base_extent[axis] > 1e-6 and abs(center[axis] - base_center[axis]) > base_extent[axis] * 0.5:
+                        alignment_warnings.append({
+                            "category": category, "type": "center_offset",
+                            "axis": axis_name, "message": "%s 分类中心相对基础人体偏移超过该轴半个基础人体尺寸；请检查坐标系和对齐。" % (category, axis_name),
+                            "base_center": base_center[axis], "category_center": center[axis],
+                        })
+        else:
+            alignment_warnings.append({
+                "category": "BASE_BODY", "type": "reference_missing",
+                "message": "没有可用的 BASE_BODY 网格包围盒，无法执行解剖层对齐比较。",
+            })
+        non_uniform_scaled_objects = [
+            item["name"] for item in anatomy_object_transforms if item["non_uniform_scale"]
+        ]
+        anatomy_alignment = {
+            "status": "review_required" if alignment_warnings or non_uniform_scaled_objects else "heuristic_checks_clear",
+            "method": "world-space axis-aligned bounding boxes compared with BASE_BODY; heuristic only",
+            "note": "包围盒和变换只能发现明显比例/坐标异常，不能证明解剖结构正确、表面贴合或层间拓扑对应；器官等局部结构可能合理地小于基础人体。",
+            "category_world_bounds": dict(sorted(anatomy_world_bounds.items())),
+            "non_uniform_scaled_objects": non_uniform_scaled_objects,
+            "warnings": alignment_warnings,
+            "object_transforms": anatomy_object_transforms,
+        }
         anatomy_readiness = {
             "status": "incomplete" if missing_anatomy_categories else "categories_present",
             "note": "分类存在不代表解剖内容正确或彼此对齐；需人工检查网格、比例、拓扑和层间对应关系。",
             "required_categories": required_anatomy_categories,
             "missing_categories": missing_anatomy_categories,
             "category_stats": dict(sorted(anatomy_category_stats.items())),
+            "alignment_audit": anatomy_alignment,
         }
 
         payload = {
