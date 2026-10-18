@@ -375,3 +375,14 @@
 - [ ] 用 Human Base Meshes v1.4.1 实测对象名筛选，检查对象是否依赖源文件中的集合、父子关系、材质、形态键和其它数据块。
 - [ ] 评估是否继续增加 Collection 选择模式；当前版本只提供精确对象名筛选，不能通过集合名称选取整组。
 - 源码提交：fa4dec83bc7416295735a0c2ee3e03942efa076d；测试提交：f014852a3d61bbe3ddac3d5d2a9eb2a567ae64d。尚无 runtime 结果。
+
+
+## 2026-10-18 新增待验证：资产来源与许可证元数据
+
+- [x] 导入面板允许填写来源网址、许可证和署名/许可声明。
+- [x] 每个导入对象记录 source URL、license、license status 和 attribution；未填写许可证时记录为 `UNVERIFIED`。
+- [x] 项目 manifest 的导入批次记录扩展上述字段；测试检查对象级元数据。
+- [ ] 在 Blender runtime 验证导入弹窗显示与对象属性持久化。
+- [ ] 建立 manifest round-trip 测试，确认已有 manifest 会追加字段而不覆盖旧导入历史。
+- [ ] 为实际引入的每个模型独立审核上游许可证、署名要求、修改与再分发限制；表单内容不是法律验证。
+- 代码提交：63e51249b6eb7fc5c6adcbf142139ccacb1bcecb；测试提交：cc42420e8c27cf4640ac8861a9eec8da9121cadb。
