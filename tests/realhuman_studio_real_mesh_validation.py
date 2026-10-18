@@ -119,14 +119,42 @@ def topology_diagnostics(mesh):
     uv_face_coverage = {}
     for layer in uv_layers:
         covered_faces = 0
+        non_finite_uv_count = 0
+        degenerate_uv_faces = []
+        out_of_unit_square_uv_count = 0
         for poly in mesh.polygons:
-            if poly.loop_total >= 3 and all(
-                    layer.data[loop_index].uv is not None for loop_index in poly.loop_indices):
+            face_uvs = [layer.data[loop_index].uv for loop_index in poly.loop_indices]
+            face_is_finite = all(
+                math.isfinite(float(uv[0])) and math.isfinite(float(uv[1]))
+                for uv in face_uvs
+            )
+            if face_is_finite and poly.loop_total >= 3:
                 covered_faces += 1
+                twice_signed_area = 0.0
+                for index, uv in enumerate(face_uvs):
+                    next_uv = face_uvs[(index + 1) % len(face_uvs)]
+                    twice_signed_area += float(uv[0]) * float(next_uv[1])
+                    twice_signed_area -= float(next_uv[0]) * float(uv[1])
+                if abs(twice_signed_area) <= 1e-12:
+                    degenerate_uv_faces.append(poly.index)
+            else:
+                non_finite_uv_count += sum(
+                    1 for uv in face_uvs
+                    if not (math.isfinite(float(uv[0])) and math.isfinite(float(uv[1])))
+                )
+            out_of_unit_square_uv_count += sum(
+                1 for uv in face_uvs
+                if float(uv[0]) < 0.0 or float(uv[0]) > 1.0
+                or float(uv[1]) < 0.0 or float(uv[1]) > 1.0
+            )
         uv_face_coverage[layer.name] = {
-            "faces_with_uvs": covered_faces,
+            "faces_with_finite_uvs": covered_faces,
             "faces_total": polygon_count,
             "coverage_ratio": covered_faces / polygon_count if polygon_count else 0.0,
+            "non_finite_uv_coordinate_count": non_finite_uv_count,
+            "degenerate_uv_face_count": len(degenerate_uv_faces),
+            "degenerate_uv_face_indices_sample": degenerate_uv_faces[:100],
+            "uv_coordinates_outside_0_1_square": out_of_unit_square_uv_count,
         }
 
     shape_key_ranges = []
@@ -211,6 +239,7 @@ report = {
         "Automated coordinate metrics do not judge anatomy, silhouette, volume preservation, or visual quality.",
         "Inspect the mesh at positive and negative slider values and check clothing intersections in the GUI.",
         "Connected components and material/UV coverage are diagnostics only; multiple components may be intentional.",
+        "UV coordinates outside the 0-1 square may be intentional for UDIM or tiled textures.",
         "Topology warnings must be reviewed manually; they do not automatically mean the asset is unusable.",
         "If modifiers change evaluated topology, per-vertex comparison is rejected rather than guessed.",
     ],
