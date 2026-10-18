@@ -263,6 +263,37 @@ def run():
     bpy.data.objects.remove(second_profile_mesh, do_unlink=True)
     bpy.data.objects.remove(proportion_mesh, do_unlink=True)
 
+    # Standardized shape-key values can be synchronized across classified
+    # meshes without overwriting arbitrary artist-created keys.
+    for key_name in ("RH脸型 | 鼻梁", "RH肌肉 | 胸肌", "RH脂肪 | 腹部", "RH毛发 | 体毛密度"):
+        if proportion_mesh.data.shape_keys.key_blocks.get(key_name) is None:
+            proportion_mesh.shape_key_add(name=key_name, from_mix=False)
+    source_standard_values = {
+        "RH脸型 | 鼻梁": 0.62,
+        "RH肌肉 | 胸肌": 0.37,
+        "RH脂肪 | 腹部": 0.81,
+        "RH毛发 | 体毛密度": 0.24,
+    }
+    for key_name, value in source_standard_values.items():
+        proportion_mesh.data.shape_keys.key_blocks[key_name].value = value
+    for key_name in source_standard_values:
+        if second_profile_mesh.data.shape_keys.key_blocks.get(key_name) is None:
+            second_profile_mesh.shape_key_add(name=key_name, from_mix=False)
+    second_profile_mesh.data.shape_keys.key_blocks["RH脸型 | 鼻梁"].value = -0.2
+    second_profile_mesh.data.shape_keys.key_blocks["RH肌肉 | 胸肌"].value = -0.3
+    second_profile_mesh.data.shape_keys.key_blocks["RH脂肪 | 腹部"].value = -0.4
+    second_profile_custom.value = 0.33
+    activate(proportion_mesh)
+    result = bpy.ops.rh_studio.sync_character_shape_key_values()
+    ensure("FINISHED" in result, "Character-wide standardized shape-key sync failed.")
+    for key_name, expected in source_standard_values.items():
+        ensure(abs(second_profile_mesh.data.shape_keys.key_blocks[key_name].value - expected) < 1e-6,
+               "Standardized parameter was not copied to target mesh: " + key_name)
+    ensure(abs(second_profile_custom.value - 0.33) < 1e-6,
+           "Standardized parameter sync overwrote an unrelated custom shape key.")
+    bpy.data.objects.remove(second_profile_mesh, do_unlink=True)
+    bpy.data.objects.remove(proportion_mesh, do_unlink=True)
+
     # Create only missing height-band masks on a subdivided mesh, and preserve
     # pre-existing/artist-edited weights when the operator is run again.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 3.0, 0.0))
