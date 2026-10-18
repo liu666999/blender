@@ -554,25 +554,34 @@ def run():
            "Fabric print material must include soft dye edges and a micrograin bump.")
     dot_links = list(dot_material.node_tree.links)
     ensure(any(link.from_node.bl_idname == "ShaderNodeMapRange"
-               and link.to_node.bl_idname == "ShaderNodeMixRGB"
-               for link in dot_links),
-           "Soft dye-edge mask is present but not connected to the print color mix.")
+               and link.to_node.bl_idname == "ShaderNodeMath"
+               and link.to_node.operation == "MULTIPLY"
+               for link in dot_links)
+           and any(link.from_node.bl_idname == "ShaderNodeMath"
+                   and link.to_node.bl_idname == "ShaderNodeMixRGB"
+                   for link in dot_links),
+           "Soft edge mask must pass through the dye-opacity multiplier before color mixing.")
     ensure(any(link.from_node.bl_idname == "ShaderNodeBump"
                and link.to_node.bl_idname == "ShaderNodeBsdfPrincipled"
                and link.to_socket.name == "Normal"
                for link in dot_links),
            "Fabric micrograin bump is present but not connected to the shader normal.")
     ensure(abs(dot_material.get("rh_studio_edge_bleed", -1.0) - 0.06) < 1e-6
-           and abs(dot_material.get("rh_studio_weave_strength", -1.0) - 0.25) < 1e-6,
-           "Fabric dye-edge and weave controls were not persisted in material metadata.")
+           and abs(dot_material.get("rh_studio_weave_strength", -1.0) - 0.25) < 1e-6
+           and abs(dot_material.get("rh_studio_dye_opacity", -1.0) - 1.0) < 1e-6
+           and abs(dot_material.get("rh_studio_fiber_scale", -1.0) - 240.0) < 1e-6,
+           "Fabric edge, opacity, weave, and fiber-scale controls were not persisted.")
     result = bpy.ops.rh_studio.create_fabric_print(
-        pattern="DYE", density=16.0, edge_bleed=0.12, weave_strength=0.65)
+        pattern="DYE", density=16.0, edge_bleed=0.12, weave_strength=0.65,
+        dye_opacity=0.72, fiber_scale=420.0)
     ensure("FINISHED" in result, "Procedural fabric dye mode failed.")
     dye_material = garment.data.materials[0]
     ensure(dye_material.get("rh_studio_pattern") == "DYE"
            and dye_material.get("rh_studio_material_type") == "procedural_fabric_dye"
            and abs(dye_material.get("rh_studio_edge_bleed", 0.0) - 0.12) < 1e-6
-           and abs(dye_material.get("rh_studio_weave_strength", 0.0) - 0.65) < 1e-6,
+           and abs(dye_material.get("rh_studio_weave_strength", 0.0) - 0.65) < 1e-6
+           and abs(dye_material.get("rh_studio_dye_opacity", 0.0) - 0.72) < 1e-6
+           and abs(dye_material.get("rh_studio_fiber_scale", 0.0) - 420.0) < 1e-6,
            "Fabric dye mode metadata is incorrect.")
     ensure(any(node.bl_idname == "ShaderNodeTexNoise" for node in dye_material.node_tree.nodes)
            and any(node.bl_idname == "ShaderNodeMapRange" for node in dye_material.node_tree.nodes),
