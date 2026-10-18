@@ -469,3 +469,12 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 实现提交：649226b5acdc5e89e84a530060f4b493e060b44e；测试提交：48cb0b0fe8a2048498f6ac30aac64ff95057cda6；文件过滤修正：1157ff40faa42de581ad23d9453b1326aa87ae8f、5ac1976616ff830c18582bacc6e450d2be21a17e。
 - 真实资产首选验证源：Blender 官方 Human Base Meshes v1.4.1，官方 listing 标注 CC0；链接与版本已记入 REALHUMAN_STUDIO_ASSET_SOURCES.md。
 - **限制/未验证：** 当前会追加选定 .blend 文件中的所有对象；尚无单个资产/集合选择 UI。测试代码已提交，但本轮没有可用的 Blender 可执行程序，因此没有声称运行通过。
+
+
+## 2026-10-18 继续开发：大型 .blend 资产包的选择性导入
+
+本轮已将 .blend 导入从“只能追加全部对象”推进到可选精确对象名：文件浏览器侧栏可填写一个或多个对象名（英文逗号分隔），留空保持原来的全量追加。源文件不包含指定名称时会报错并触发现有导入回滚路径。新增 smoke 用例覆盖选择性导入与全量导入。
+
+- 源码：fa4dec83bc7416295735a0c2ee3e03942efa076d
+- 测试：f014852a3d61bbe3ddac3d5d2a9eb2a567ae64d6
+- 当前限制：未执行 Blender runtime；尚未实现集合树选择。真实 Human Base Meshes 包的对象依赖、形态键、材质和导入耗时仍待实测，不能宣称已完成真实人体资产集成。
