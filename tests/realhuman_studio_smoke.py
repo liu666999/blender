@@ -160,6 +160,16 @@ def run():
                ".blend import did not preserve category/source/batch tracking.")
         bpy.data.objects.remove(appended, do_unlink=True)
 
+        objects_before_invalid_selection = {obj.as_pointer() for obj in bpy.data.objects}
+        result = bpy.ops.rh_studio.import_asset(
+            filepath=blend_path, category="BASE_BODY",
+            blend_object_names="RH CI Object That Does Not Exist",
+        )
+        ensure("CANCELLED" in result,
+               "Unknown source object names must cancel selective .blend import.")
+        ensure({obj.as_pointer() for obj in bpy.data.objects} == objects_before_invalid_selection,
+               "Invalid .blend object selection should leave no imported objects behind.")
+
         result = bpy.ops.rh_studio.import_asset(filepath=blend_path, category="BASE_BODY")
         ensure("FINISHED" in result, "Importing all objects from a .blend library failed.")
         ensure(bpy.data.objects.get("RH CI Appended Library Sphere") is not None
