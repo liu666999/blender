@@ -62,3 +62,12 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 - 代码提交：fa4dec83bc7416295735a0c2ee3e03942efa076d
 - 测试提交：f014852a3d61bbe3ddac3d5d2a9eb2a567ae64d
 - 后续仍需真实资产验证依赖、集合归属、shape keys、UV、材质与许可；该功能不是资产本身，也不代表 Human Base Meshes 已导入项目。
+
+
+## 2026-10-18：导入资产的来源与许可记录
+
+导入器现在可记录上游来源网址、许可证名称和署名声明。对象会持久化这些自定义属性；项目 manifest 存在时也会记录到导入批次。未填写许可会被标记为 `UNVERIFIED`，不代表该资源可以合法使用。官方 Human Base Meshes 与 Écorché 等资源仍应逐项检查上游声明和具体资源条款。
+
+- 代码提交：63e51249b6eb7fc5c6adcbf142139ccacb1bcecb
+- 测试提交：cc42420e8c27cf4640ac8861a9eec8da9121cadb
+- 尚未在 Blender runtime 验证。
