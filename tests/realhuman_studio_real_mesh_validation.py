@@ -15,6 +15,7 @@ import math
 from datetime import datetime, timezone
 
 import bpy
+import bmesh
 
 CONTROL_NAMES = (
     "RH体型 | 肩宽",
@@ -99,8 +100,13 @@ def topology_diagnostics(mesh):
 
     component_roots = {find(index) for index in used_vertices}
     zero_area_faces = [poly.index for poly in mesh.polygons if poly.area <= 1e-12]
-    boundary_edges = sum(1 for edge in mesh.edges if getattr(edge, "is_boundary", False))
-    non_manifold_edges = sum(1 for edge in mesh.edges if not getattr(edge, "is_manifold", True))
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(mesh)
+        boundary_edges = sum(1 for edge in bm.edges if edge.is_boundary)
+        non_manifold_edges = sum(1 for edge in bm.edges if not edge.is_manifold)
+    finally:
+        bm.free()
     polygons_without_material = []
     used_material_indices = set()
     for poly in mesh.polygons:
