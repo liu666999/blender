@@ -463,3 +463,13 @@
 - [ ] 根据真实对象名称执行选择导入、分类归档与真实网格验证。
 
 提交：`fcd2044bfe6926b0958de9dccb58641aa2646344`。尚未在 Blender runtime 运行。
+
+
+### 资产清点工具增强（待 Blender 验证）
+
+- [x] 清点 JSON 增加基于对象名关键词的 `category_suggestions`。
+- [x] 对单一候选、多个候选、无候选分别标注，避免静默自动分类。
+- [x] 报告明确提醒：名称建议必须人工审核，不是解剖判定。
+- [ ] 在实际 Human Base Meshes `.blend` 文件上运行并评估命中质量。
+
+提交：`5000d7449a06c7d6f03f2fb8a7c833638be4c142`；未运行 Blender runtime。
