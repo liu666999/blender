@@ -55,10 +55,10 @@ def validate(report):
             errors.append(prefix + " duplicates object suggestion: " + name)
         else:
             seen.add(name)
-        if not isinstance(candidates, list) or any(c not in ALLOWED_CATEGORIES for c in candidates):
+        if not isinstance(candidates, list) or any(not isinstance(c, str) or c not in ALLOWED_CATEGORIES for c in candidates):
             errors.append(prefix + " has invalid candidate_categories")
             candidates = []
-        if suggested is not None and (suggested not in ALLOWED_CATEGORIES or len(candidates) != 1 or candidates[0] != suggested):
+        if suggested is not None and (not isinstance(suggested, str) or suggested not in ALLOWED_CATEGORIES or len(candidates) != 1 or candidates[0] != suggested):
             errors.append(prefix + " suggested_category must be the sole candidate")
         expected = "suggested_review_required" if len(candidates) == 1 else ("ambiguous_review_required" if candidates else "unclassified_review_required")
         if status != expected:
@@ -76,7 +76,7 @@ def validate(report):
         item = suggestion_by_name.get(name)
         if name not in object_names:
             errors.append("draft references unknown object: " + str(name))
-        if category not in ALLOWED_CATEGORIES:
+        if not isinstance(category, str) or category not in ALLOWED_CATEGORIES:
             errors.append("draft contains invalid category for: " + str(name))
         if not item or item.get("suggested_category") != category or len(item.get("candidate_categories", [])) != 1:
             errors.append("draft entry is not a unique suggestion: " + str(name))
