@@ -572,3 +572,8 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 更新 `.github/workflows/realhuman-studio-validation.yml`：在相关推送和 Pull Request 中执行 `python -m compileall -q scripts/addons_core/realhuman_studio tests`，并运行资产清单验证器的单元测试。
 - 本会话在临时目录重建验证器与单元测试后，执行 `compileall`（仅这两个测试侧 Python 文件）和 `unittest`，6 项测试全部通过。
 - 限制：当前执行环境无法直接访问 GitHub 克隆仓库，因此没有在本地编译整个插件源目录；整个插件的语法编译结果要以新工作流在 GitHub Actions 的运行记录为准。`compileall` 也不等同于 Blender 内注册/运行测试。
+
+## 2026-10-19：修正分类提示的实际显示错误
+- 检查导入/创建图层操作器时发现两处过期提示：创建分类图层后固定显示“10 个”，而当前分类枚举数量已变化；通过 JSON 对象分类映射导入多分类资源时，成功提示仍只显示默认分类，容易误导用户。
+- 已修改 `RH_OT_create_layers`，按 `CATEGORY_ITEMS` 实际数量生成提示；已修改 `RH_OT_import_asset`，根据本次真实分组显示所有目标分类。
+- 这是源代码修复；当前尚未取得 GitHub Actions 对完整插件目录的编译结果，也未在 Blender 内交互验证。
