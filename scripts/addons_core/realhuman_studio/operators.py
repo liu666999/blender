@@ -347,7 +347,7 @@ class RH_OT_create_layers(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
     def execute(self, context):
         ensure_category_scaffold(context.scene)
-        self.report({"INFO"}, "已创建 10 个分类图层。")
+        self.report({"INFO"}, "已创建或确认 %d 个分类图层。" % len(CATEGORY_ITEMS))
         return {"FINISHED"}
 
 def parse_import_category_map(raw_json, imported_names, fallback_category):
@@ -528,8 +528,10 @@ class RH_OT_import_asset(bpy.types.Operator, ImportHelper):
             _select_imported_objects(context, imported)
         except Exception as exc:
             selection_warning = "资源已导入，但自动选择失败：" + str(exc)
-        self.report({"INFO"}, "已导入 %d 个对象到「%s」。批次：%s" %
-                    (len(imported), CATEGORY_COLLECTIONS[self.category], batch_id[:8]))
+        category_labels = [CATEGORY_COLLECTIONS[key] for key in grouped]
+        destination_label = "、".join(category_labels)
+        self.report({"INFO"}, "已导入 %d 个对象到分类「%s」。批次：%s" %
+                    (len(imported), destination_label, batch_id[:8]))
         if not history_saved:
             self.report({"WARNING"}, history_message)
         if selection_warning:
