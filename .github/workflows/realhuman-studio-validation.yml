@@ -14,6 +14,8 @@ on:
     paths:
       - 'tests/validate_realhuman_studio_asset_inventory.py'
       - 'tests/test_validate_realhuman_studio_asset_inventory.py'
+      - 'scripts/addons_core/realhuman_studio/**/*.py'
+      - 'scripts/addons_core/realhuman_studio/*.py'
       - '.github/workflows/realhuman-studio-validation.yml'
   workflow_dispatch:
 
