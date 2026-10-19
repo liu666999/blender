@@ -473,3 +473,12 @@
 - [ ] 在实际 Human Base Meshes `.blend` 文件上运行并评估命中质量。
 
 提交：`5000d7449a06c7d6f03f2fb8a7c833638be4c142`；未运行 Blender runtime。
+
+### 资产清点到导入映射的衔接（代码已写，待运行验证）
+
+- [x] 清点 JSON 新增 `category_map_draft`，把唯一关键词匹配的对象名/分类 ID 输出成可复制审核的 JSON 对象。
+- [x] 显式输出 `category_map_draft_review_required: true`；歧义与未分类对象不自动加入草稿。
+- [x] notes 明确该映射是待人工审核的名称提示，不是解剖学判定。
+- [ ] 在实际 `.blend` 资产包上检查草稿质量，再复制到导入器并验证分类结果。
+
+提交：`7144e8d68f6c6cb4763a9a25dce1667f0ed6e5b0`。
