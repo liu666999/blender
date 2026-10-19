@@ -137,3 +137,7 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 `tests/realhuman_studio_asset_inventory.py` 会为每个源对象名称生成 `category_suggestions`。单一关键词命中只作为建议；多个命中会标为歧义；没有命中则留待人工分类。此规则仅依赖名称，不读取几何结构，也不证明对象的实际解剖含义。请在检查原始资产和授权信息后人工确认，再把精确名称写入导入器的分类映射 JSON。
 
 代码提交：`5000d7449a06c7d6f03f2fb8a7c833638be4c142`。尚未用真实资源包运行验证。
+
+### 2026-10-19：分类映射草稿输出
+
+资产清点 JSON 新增 `category_map_draft`：仅包含唯一关键词匹配的精确对象名称和分类 ID，可供导入器 `category_map_json` 使用前人工审核；歧义和未分类项不会自动加入。报告显式标注 `category_map_draft_review_required: true`。这不能替代源资产核验，也不证明对象属于相应解剖类别。提交：`7144e8d68f6c6cb4763a9a25dce1667f0ed6e5b0`。
