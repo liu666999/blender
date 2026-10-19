@@ -567,3 +567,8 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 新增 `tests/test_validate_realhuman_studio_asset_inventory.py`，覆盖有效报告、重复对象名、未知对象、歧义映射、畸形建议字段和缺少人工复核标记。
 - 新增 `.github/workflows/realhuman-studio-validation.yml`，在相关文件变更时运行标准 Python 单元测试，无需安装 Blender。
 - 注意：CI 工作流已提交，但远端是否已执行及结果需查看 GitHub Actions；这不是 Blender 内的网格/解剖验证。
+
+## 2026-10-19：增加编译检查并执行离线测试
+- 更新 `.github/workflows/realhuman-studio-validation.yml`：在相关推送和 Pull Request 中执行 `python -m compileall -q scripts/addons_core/realhuman_studio tests`，并运行资产清单验证器的单元测试。
+- 本会话在临时目录重建验证器与单元测试后，执行 `compileall`（仅这两个测试侧 Python 文件）和 `unittest`，6 项测试全部通过。
+- 限制：当前执行环境无法直接访问 GitHub 克隆仓库，因此没有在本地编译整个插件源目录；整个插件的语法编译结果要以新工作流在 GitHub Actions 的运行记录为准。`compileall` 也不等同于 Blender 内注册/运行测试。
