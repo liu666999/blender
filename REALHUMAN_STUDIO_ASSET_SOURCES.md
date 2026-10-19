@@ -141,3 +141,7 @@ RealHuman Studio 导入器新增 .blend 精确对象名筛选：可以从上游�
 ### 2026-10-19：分类映射草稿输出
 
 资产清点 JSON 新增 `category_map_draft`：仅包含唯一关键词匹配的精确对象名称和分类 ID，可供导入器 `category_map_json` 使用前人工审核；歧义和未分类项不会自动加入。报告显式标注 `category_map_draft_review_required: true`。这不能替代源资产核验，也不证明对象属于相应解剖类别。提交：`7144e8d68f6c6cb4763a9a25dce1667f0ed6e5b0`。
+
+### 2026-10-19：资产清点报告离线校验
+
+新增 `tests/validate_realhuman_studio_asset_inventory.py`，使用系统 Python 即可检查清点 JSON 的结构与分类映射草稿安全约束，无需 Blender。它只检查报告完整性，不检查源资产许可、几何质量或解剖正确性。建议流程为：在 Blender 中生成报告 → 普通 Python 校验报告 → 人工审查对象名与分类 → 导入并进行网格/视觉验证。代码提交：`98c1a13ffaa30e3bfbd17e613101110808b729aa`、`dcc66cd396519e17fcc134bea8514a4fd89240f9`。尚未执行测试。
