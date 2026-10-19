@@ -86,11 +86,21 @@ def main():
                 "ambiguous_review_required" if matches else "unclassified_review_required"),
         })
     inventory["category_suggestions"] = suggestions
+
+    # Ready-to-review mapping for RH_OT_import_asset.category_map_json. Only
+    # unique keyword matches are included; all are still unverified suggestions.
+    inventory["category_map_draft"] = {
+        item["object_name"]: item["suggested_category"]
+        for item in suggestions
+        if item["suggested_category"] is not None
+    }
+    inventory["category_map_draft_review_required"] = True
     inventory["notes"] = [
         "This report inventories datablock names only; it does not prove mesh quality or anatomy.",
         "Object names are exact source-library names and may differ from collection names.",
         "A collection's nested hierarchy is not inferred from the name list.",
         "category_suggestions are keyword-based hints only; manually verify anatomy before importing.",
+        "category_map_draft contains only unique keyword matches and is not validated anatomy; review every entry before copying it into category_map_json.",
         "An object name can match multiple categories or none; ambiguous/unclassified entries are not auto-assigned.",
         "Inspect upstream license and attribution separately before redistributing any asset.",
     ]
