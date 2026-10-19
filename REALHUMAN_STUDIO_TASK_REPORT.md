@@ -560,3 +560,10 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ### 2026-10-19 新增：资产清点 JSON 离线结构校验器
 
 新增 `tests/validate_realhuman_studio_asset_inventory.py`，可用普通 Python（无需启动 Blender）校验清点报告的 schema、数据块名称数组、对象建议条目唯一性、建议状态与候选数一致性，以及 `category_map_draft` 是否只引用唯一匹配的候选类别。它可在导入前发现报告结构损坏或映射草稿异常，但不验证网格质量或解剖真实性。提交：`98c1a13ffaa30e3bfbd17e613101110808b729aa`；随后加固对畸形 JSON 值的处理，提交：`dcc66cd396519e17fcc134bea8514a4fd89240f9`。目前尚未运行此脚本或真实资产报告。
+
+
+## 2026-10-19：离线资产清单验证测试
+- 加固 `tests/validate_realhuman_studio_asset_inventory.py`：畸形对象名（如列表/字典）不会再作为字典键触发异常；草稿映射的候选列表必须是有效列表且仅有一个候选。
+- 新增 `tests/test_validate_realhuman_studio_asset_inventory.py`，覆盖有效报告、重复对象名、未知对象、歧义映射、畸形建议字段和缺少人工复核标记。
+- 新增 `.github/workflows/realhuman-studio-validation.yml`，在相关文件变更时运行标准 Python 单元测试，无需安装 Blender。
+- 注意：CI 工作流已提交，但远端是否已执行及结果需查看 GitHub Actions；这不是 Blender 内的网格/解剖验证。
