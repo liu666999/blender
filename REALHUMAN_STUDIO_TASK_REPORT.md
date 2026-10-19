@@ -556,3 +556,7 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ### 分类映射草稿直接输出（2026-10-19）
 
 清点脚本新增 `category_map_draft`，将唯一关键词匹配的精确对象名与分类 ID 输出为可审核 JSON，便于复制到导入器 `category_map_json`；同时输出 `category_map_draft_review_required: true` 并在 notes 中明确必须人工复核。歧义或无匹配项不会进入草稿，避免自动选择其中一个类别。此功能只生成草稿，不自动导入或认定解剖正确。提交：`7144e8d68f6c6cb4763a9a25dce1667f0ed6e5b0`。尚未在 Blender runtime 运行。
+
+### 2026-10-19 新增：资产清点 JSON 离线结构校验器
+
+新增 `tests/validate_realhuman_studio_asset_inventory.py`，可用普通 Python（无需启动 Blender）校验清点报告的 schema、数据块名称数组、对象建议条目唯一性、建议状态与候选数一致性，以及 `category_map_draft` 是否只引用唯一匹配的候选类别。它可在导入前发现报告结构损坏或映射草稿异常，但不验证网格质量或解剖真实性。提交：`98c1a13ffaa30e3bfbd17e613101110808b729aa`；随后加固对畸形 JSON 值的处理，提交：`dcc66cd396519e17fcc134bea8514a4fd89240f9`。目前尚未运行此脚本或真实资产报告。
