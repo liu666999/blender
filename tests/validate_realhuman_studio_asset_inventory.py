@@ -71,14 +71,15 @@ def validate(report):
         draft = {}
     if report.get("category_map_draft_review_required") is not True:
         errors.append("category_map_draft_review_required must be true")
-    suggestion_by_name = {i.get("object_name"): i for i in suggestions if isinstance(i, dict)}
+    suggestion_by_name = {i.get("object_name"): i for i in suggestions if isinstance(i, dict) and isinstance(i.get("object_name"), str)}
     for name, category in draft.items():
         item = suggestion_by_name.get(name)
         if name not in object_names:
             errors.append("draft references unknown object: " + str(name))
         if not isinstance(category, str) or category not in ALLOWED_CATEGORIES:
             errors.append("draft contains invalid category for: " + str(name))
-        if not item or item.get("suggested_category") != category or len(item.get("candidate_categories", [])) != 1:
+        item_candidates = item.get("candidate_categories") if item else None
+        if not item or item.get("suggested_category") != category or not isinstance(item_candidates, list) or len(item_candidates) != 1:
             errors.append("draft entry is not a unique suggestion: " + str(name))
     return errors
 
