@@ -590,3 +590,8 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 延续体型控制输入审查，发现初始区域遮罩操作器仍允许只有顶点/边、没有多边形面的网格进入流程。现已在创建任何顶点组前拒绝该类输入，并扩展 Blender smoke regression 检查取消结果及顶点组未被创建。
 - 实现提交：`a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8`；测试提交：`bbaa94a7f9d58b825d165f7b3133bf3629a993f0`。
 - 当前仅确认变更已提交到分支；尚无对应 Blender runtime / GitHub Actions 结果。
+
+## 2026-10-20 — Body proportion geometry preflight
+- Audited the body-proportion generator and found it only checked X width and Z height. A planar mesh with zero local Y depth could therefore be accepted even though it cannot represent a volumetric torso.
+- Added finite, non-zero checks for all three local-axis extents before creating or updating shape keys; invalid geometry is rejected before mutation.
+- Added a Blender smoke-test regression fixture for a depthless mesh and verified the intended cancellation/no-Basis assertions are present in the test source. Blender runtime execution has not been available in this session, so runtime pass is not claimed.
