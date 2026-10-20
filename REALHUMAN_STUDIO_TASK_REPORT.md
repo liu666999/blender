@@ -610,3 +610,8 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 验证器提交：`ec6106b52e1689b0fccca2ddd149f9064fee5105`
 - 单元测试提交：`1d6ab308e1126c40c4e2c73423fa68484e8639e3`
 - 仍需取得该分支最新 GitHub Actions 运行结果，并在 Blender 中生成真实资产包报告后再运行离线验证器；目前未声称测试或真实资产导入已通过。
+
+
+## 2026-10-20：离线校验 CI 覆盖范围修正
+
+检查工作流后发现，原有 GitHub Actions 的 `paths` 过滤器和 unittest 命令只覆盖旧的单文件资产清单验证器，因此新建的 bundle validator 即使提交也不会自动参与常规 push 检查。现已将新验证器及其测试加入 push/PR 路径过滤器，并将两个测试模块都加入 unittest 命令。工作流修正提交：`e3cab54831a8b4987689bba7f053879b06cbbd17`、`4d41acf64af4e93eac92dcb8b71afad9f81dd93e`。目前尚无可确认的 Actions 运行结果，不能标记为 CI 通过。
