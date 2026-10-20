@@ -247,6 +247,11 @@ def run():
            "A mesh without polygon faces must be rejected by body-proportion generation.")
     ensure(surface_less_mesh.data.shape_keys is None,
            "Surface-less geometry rejection must not create a partial Basis shape key.")
+    result = bpy.ops.rh_studio.create_body_proportion_masks()
+    ensure("CANCELLED" in result,
+           "A mesh without polygon faces must be rejected by body-mask generation.")
+    ensure(len(surface_less_mesh.vertex_groups) == 0,
+           "Surface-less geometry rejection must not create body-mask vertex groups.")
     bpy.data.objects.remove(surface_less_mesh, do_unlink=True)
     if surface_less_data.users == 0:
         bpy.data.meshes.remove(surface_less_data)
