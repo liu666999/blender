@@ -163,3 +163,6 @@ GitHub Actions 现在会对 `scripts/addons_core/realhuman_studio` 与 `tests` �
 ## 2026-10-20 补充：人体区域遮罩输入防护
 
 体型区域遮罩生成器现在会拒绝没有多边形面的网格，避免对非表面几何创建伪人体区域顶点组。实现提交 `a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8`，回归用例提交 `bbaa94a7f9d58b825d165f7b3133bf3629a993f0`。这只是输入防护；真实 Human Base Meshes 仍未在当前环境中下载、导入或实测，runtime 状态待验证。
+
+## Geometry validation note (2026-10-20)
+The proportion generator now requires non-zero finite extents on local X/Y/Z. This is only a geometry sanity check, not an asset-quality check: imported human meshes still need inspection for orientation, topology, proportions, UVs, shape keys, and licensing before being treated as production-ready.
