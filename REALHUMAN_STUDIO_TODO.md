@@ -521,3 +521,10 @@
 ## Validation follow-up (2026-10-20)
 - [ ] Run `tests/realhuman_studio_smoke.py` in the target Blender runtime and confirm the new zero-depth rejection case passes.
 - [ ] Validate proportion controls on an actual licensed human base mesh; local-axis bounding-box checks are only a basic preflight and do not prove anatomical correctness or upright orientation.
+
+
+## Asset bundle intake next steps (2026-10-20)
+- [ ] Download and extract official Human Base Meshes v1.4.1, then run `tests/realhuman_studio_bundle_inventory.py` in Blender with `SOURCE_DIRECTORY` set to the extracted folder.
+- [ ] Review the JSON report and visually verify the realistic male/female body, head, hands/feet, skull, and skeleton assets before importing selected objects.
+- [ ] Keep source license and attribution evidence with each imported asset; inventory names alone do not establish permission or anatomy.
+- [ ] Run the Blender smoke tests and the real-mesh validation script in the target Blender runtime; record actual output and inspect screenshots before marking validation passed.
