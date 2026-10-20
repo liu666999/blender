@@ -536,3 +536,9 @@
 - [ ] 在 Blender 中对官方 Human Base Meshes 解压目录运行 `tests/realhuman_studio_bundle_inventory.py`，生成真实清单 JSON。
 - [ ] 使用普通 Python 运行 `tests/validate_realhuman_studio_bundle_inventory.py <报告路径>`，记录真实输出并处理任何结构错误。
 - [ ] 逐个目视核验候选人体、头部、骨骼等对象及其拓扑、UV、材质、坐标/单位和许可证；在完成前不把资产接入或变形质量标为通过。
+
+
+## 2026-10-20 补充：CI 工作流修正
+
+- [ ] 检查提交 `4d41acf64af4e93eac92dcb8b71afad9f81dd93e` 对应 GitHub Actions 运行结果，确认 `compileall` 与两个验证器单元测试都实际执行并通过。
+- [ ] 如果 push 工作流未触发，检查仓库 Actions 权限/运行记录；不要把空的 status 列表当作通过。
