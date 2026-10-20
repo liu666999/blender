@@ -2525,9 +2525,12 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
         max_y = max(co.y for co in base_coords)
         min_z = min(co.z for co in base_coords)
         max_z = max(co.z for co in base_coords)
+        width_x = max_x - min_x
+        depth_y = max_y - min_y
         height = max_z - min_z
-        if height < 1e-6 or max_x - min_x < 1e-6:
-            self.report({"ERROR"}, "网格尺寸异常，无法生成体型控制。")
+        dimensions = (width_x, depth_y, height)
+        if any(not math.isfinite(value) or value < 1e-6 for value in dimensions):
+            self.report({"ERROR"}, "网格三轴尺寸异常或近似为零；体型控制需要有厚度的完整人体表面。")
             return {"CANCELLED"}
 
         # Only create Basis after all geometry preconditions have passed.
