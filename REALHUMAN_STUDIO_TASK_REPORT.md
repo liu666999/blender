@@ -595,3 +595,9 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - Audited the body-proportion generator and found it only checked X width and Z height. A planar mesh with zero local Y depth could therefore be accepted even though it cannot represent a volumetric torso.
 - Added finite, non-zero checks for all three local-axis extents before creating or updating shape keys; invalid geometry is rejected before mutation.
 - Added a Blender smoke-test regression fixture for a depthless mesh and verified the intended cancellation/no-Basis assertions are present in the test source. Blender runtime execution has not been available in this session, so runtime pass is not claimed.
+
+
+## 2026-10-20 — Batch inventory for extracted asset bundles
+- Added `tests/realhuman_studio_bundle_inventory.py` for scanning an extracted folder recursively and inspecting every `.blend` library without appending or modifying assets.
+- The JSON report records per-file object/collection/mesh/armature/material/image/action names, advisory object-category suggestions, and per-file read failures. A partial scan is reported explicitly rather than silently treated as complete.
+- This enables reviewing the official Human Base Meshes bundle as a set of files before choosing individual body/head/skull/skeleton assets for import. It does not replace Blender runtime execution, visual anatomy review, or per-asset license verification.
