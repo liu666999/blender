@@ -231,6 +231,19 @@ def run():
            "Rejected geometry must not be mutated by creating a stray Basis shape key.")
     bpy.data.objects.remove(flat_mesh, do_unlink=True)
 
+    # A planar surface has no torso depth and cannot support meaningful 3D body proportions.
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+    depthless_mesh = bpy.context.object
+    for vertex in depthless_mesh.data.vertices:
+        vertex.co.y = 0.0
+    activate(depthless_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("CANCELLED" in result,
+           "A mesh with zero Y depth should be rejected by body-proportion generation.")
+    ensure(depthless_mesh.data.shape_keys is None,
+           "Depthless geometry rejection must not create a stray Basis shape key.")
+    bpy.data.objects.remove(depthless_mesh, do_unlink=True)
+
     # A vertex/edge-only mesh must not be accepted as a body surface.
     surface_less_data = bpy.data.meshes.new("RH CI Surface-less Mesh")
     surface_less_data.from_pydata(
