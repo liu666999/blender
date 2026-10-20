@@ -155,3 +155,7 @@ GitHub Actions 现在会对 `scripts/addons_core/realhuman_studio` 与 `tests` �
 
 ## 导入分类提示修正（2026-10-19）
 导入操作的成功提示现在反映本批次实际使用的分类；分类图层创建提示也根据当前枚举数量动态生成。这些修改只改善操作反馈准确性，不代表外部人体资产已验证或导入。
+
+## 2026-10-20：人体基础网格输入检查补充
+
+体型控制生成器新增了“必须存在多边形面”的输入防护及对应 Blender smoke regression。此项不是资产来源或质量认证：官方 CC0 Human Base Meshes 仍未在当前环境中下载、导入和实测；请在 `REALHUMAN_STUDIO_TODO.md` 中追踪真实人体验证状态。代码提交 `a7c2a24552606b420804645fe2ccae8058473c3f`，测试提交 `01483921939f3ca11d5d205b85bbfcde9c87c14f`，runtime 状态待验证。
