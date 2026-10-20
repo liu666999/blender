@@ -525,3 +525,9 @@
 ## Geometry guard added (2026-10-20)
 - Body-proportion generation now rejects meshes whose local X, Y, or Z extent is non-finite or effectively zero, before creating a Basis or modifying shape keys.
 - Added a smoke-test regression case asserting that a zero-depth mesh is cancelled without creating shape keys. This is implemented in source; runtime validation remains pending.
+
+
+## Asset-bundle batch inventory helper (2026-10-20)
+- Added `tests/realhuman_studio_bundle_inventory.py`: recursively inventories `.blend` files under a user-selected extracted bundle directory using Blender's library API in read-only inventory mode.
+- Outputs JSON with discovered/inspected/failed counts, per-file datablock lists, advisory object-name category suggestions, and explicit review notes. Failed files are surfaced in the report.
+- Source implementation committed; not yet executed in Blender runtime against the official bundle.
