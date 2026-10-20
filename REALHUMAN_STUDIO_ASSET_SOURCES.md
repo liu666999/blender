@@ -166,3 +166,12 @@ GitHub Actions 现在会对 `scripts/addons_core/realhuman_studio` 与 `tests` �
 
 ## Geometry validation note (2026-10-20)
 The proportion generator now requires non-zero finite extents on local X/Y/Z. This is only a geometry sanity check, not an asset-quality check: imported human meshes still need inspection for orientation, topology, proportions, UVs, shape keys, and licensing before being treated as production-ready.
+
+
+## 2026-10-20：官方人体资产包批量盘点工具
+
+新增 `tests/realhuman_studio_bundle_inventory.py`。在 Blender 中设置 `SOURCE_DIRECTORY` 为已解压的 Human Base Meshes 目录并运行脚本，即可递归读取其中每个 `.blend` 库的对象、集合、网格、骨架、材质、图片与动作名称，生成 `realhuman_studio_bundle_inventory.json`。它只读取库内数据块名称，不追加或修改源资产；无法读取的文件会进入 `failures` 列表。
+
+- 官方资源页列出的 Human Base Meshes v1.4.1 为约 49 MB、CC0、要求 Blender 4.2 或更新版本。官方入口：https://www.blender.org/download/demo-files/；直接下载：https://mirror.blender.org/demo/asset-bundles/human-base-meshes/human-base-meshes-bundle-v1.4.1.zip
+- 类别建议只根据名称匹配，必须人工核对网格和具体许可；批量盘点工具没有下载资产，也没有验证实际解剖质量。
+- 代码提交：`6a02a6f961f64efcdccdd5acda340aed0449b908`。尚未在 Blender runtime 中运行。
