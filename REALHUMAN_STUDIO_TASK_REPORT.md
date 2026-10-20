@@ -601,3 +601,12 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - Added `tests/realhuman_studio_bundle_inventory.py` for scanning an extracted folder recursively and inspecting every `.blend` library without appending or modifying assets.
 - The JSON report records per-file object/collection/mesh/armature/material/image/action names, advisory object-category suggestions, and per-file read failures. A partial scan is reported explicitly rather than silently treated as complete.
 - This enables reviewing the official Human Base Meshes bundle as a set of files before choosing individual body/head/skull/skeleton assets for import. It does not replace Blender runtime execution, visual anatomy review, or per-asset license verification.
+
+
+## 2026-10-20：资产包清单离线质量门
+
+新增 `tests/validate_realhuman_studio_bundle_inventory.py` 与对应单元测试。它们在不依赖 Blender 的普通 Python 环境中验证批量 `.blend` 盘点 JSON 的 schema、文件计数一致性、重复路径、各类数据块列表、对象分类建议覆盖率及分类状态一致性；失败文件也必须带路径与错误说明。此检查只验证报告结构，不证明模型解剖正确、网格质量合格或许可证有效。
+
+- 验证器提交：`ec6106b52e1689b0fccca2ddd149f9064fee5105`
+- 单元测试提交：`1d6ab308e1126c40c4e2c73423fa68484e8639e3`
+- 仍需取得该分支最新 GitHub Actions 运行结果，并在 Blender 中生成真实资产包报告后再运行离线验证器；目前未声称测试或真实资产导入已通过。
