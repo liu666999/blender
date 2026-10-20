@@ -531,3 +531,10 @@
 - Added `tests/realhuman_studio_bundle_inventory.py`: recursively inventories `.blend` files under a user-selected extracted bundle directory using Blender's library API in read-only inventory mode.
 - Outputs JSON with discovered/inspected/failed counts, per-file datablock lists, advisory object-name category suggestions, and explicit review notes. Failed files are surfaced in the report.
 - Source implementation committed; not yet executed in Blender runtime against the official bundle.
+
+
+## 2026-10-20 补充：资产包报告离线校验代码已提交
+
+- 新增 `tests/validate_realhuman_studio_bundle_inventory.py`，检查 bundle inventory JSON 的基本结构、计数一致性、重复资产/失败路径、对象名清单与分类建议覆盖关系，并强制保留人工复核标记。
+- 新增 `tests/test_validate_realhuman_studio_bundle_inventory.py`，覆盖正常报告、计数不一致、重复路径、建议缺失、非法分类、复核标记缺失和资产/失败路径冲突等案例。
+- 代码已推送到 `feature/realhuman-studio-phase1`；当前只确认 GitHub 文件提交成功，不把它描述为测试已通过。实际测试执行与 GitHub Actions 结果待确认。
