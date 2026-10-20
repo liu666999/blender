@@ -2495,6 +2495,12 @@ class RH_OT_generate_body_proportion_keys(bpy.types.Operator):
         # This first-stage proportion tool assumes an upright, single full-body
         # mesh in local Z-up coordinates. Validate geometry before adding Basis:
         # a rejected mesh must not be modified as a side effect.
+        # A vertex cloud or edge-only mesh is not a usable body surface.
+        # Reject it before creating Basis or touching any existing shape keys.
+        if len(obj.data.polygons) == 0:
+            self.report({"ERROR"}, "当前网格没有多边形表面，无法生成体型控制。")
+            return {"CANCELLED"}
+
         shape_keys = obj.data.shape_keys
         basis = shape_keys.key_blocks[0] if shape_keys else None
         if basis is None:
