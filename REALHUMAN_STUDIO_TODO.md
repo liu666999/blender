@@ -528,3 +528,11 @@
 - [ ] Review the JSON report and visually verify the realistic male/female body, head, hands/feet, skull, and skeleton assets before importing selected objects.
 - [ ] Keep source license and attribution evidence with each imported asset; inventory names alone do not establish permission or anatomy.
 - [ ] Run the Blender smoke tests and the real-mesh validation script in the target Blender runtime; record actual output and inspect screenshots before marking validation passed.
+
+
+## 2026-10-20 补充：资产包报告离线校验
+
+- [ ] 获取最新 GitHub Actions 结果，确认新增 bundle inventory validator 的单元测试和整个插件/tests 的语法编译是否通过。
+- [ ] 在 Blender 中对官方 Human Base Meshes 解压目录运行 `tests/realhuman_studio_bundle_inventory.py`，生成真实清单 JSON。
+- [ ] 使用普通 Python 运行 `tests/validate_realhuman_studio_bundle_inventory.py <报告路径>`，记录真实输出并处理任何结构错误。
+- [ ] 逐个目视核验候选人体、头部、骨骼等对象及其拓扑、UV、材质、坐标/单位和许可证；在完成前不把资产接入或变形质量标为通过。
