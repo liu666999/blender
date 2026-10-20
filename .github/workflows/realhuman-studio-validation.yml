@@ -1,0 +1,36 @@
+name: RealHuman Studio offline validation
+
+on:
+  push:
+    branches:
+      - feature/realhuman-studio-phase1
+    paths:
+      - 'tests/validate_realhuman_studio_asset_inventory.py'
+      - 'tests/test_validate_realhuman_studio_asset_inventory.py'
+      - 'scripts/addons_core/realhuman_studio/**/*.py'
+      - 'scripts/addons_core/realhuman_studio/*.py'
+      - '.github/workflows/realhuman-studio-validation.yml'
+  pull_request:
+    paths:
+      - 'tests/validate_realhuman_studio_asset_inventory.py'
+      - 'tests/test_validate_realhuman_studio_asset_inventory.py'
+      - 'scripts/addons_core/realhuman_studio/**/*.py'
+      - 'scripts/addons_core/realhuman_studio/*.py'
+      - '.github/workflows/realhuman-studio-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  inventory-validator-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Compile add-on and test Python files
+        run: python -m compileall -q scripts/addons_core/realhuman_studio tests
+      - name: Run validator unit tests
+        working-directory: tests
+        run: python -m unittest -v test_validate_realhuman_studio_asset_inventory.py
