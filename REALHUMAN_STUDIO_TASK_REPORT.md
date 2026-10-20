@@ -584,3 +584,9 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 已在 `RH_OT_generate_body_proportion_keys` 创建/更新形态键前增加 `len(obj.data.polygons) == 0` 拒绝条件，并在 `tests/realhuman_studio_smoke.py` 增加无面网格回归用例。
 - 提交：`a7c2a24552606b420804645fe2ccae8058473c3f`（实现）、`01483921939f3ca11d5d205b85bbfcde9c87c14f`（回归用例）。
 - **状态：源码与测试已提交，尚未在 Blender runtime 或当前 HEAD 的 Actions 中执行；不代表测试通过。** 该校验只能排除无表面输入，不能判断真实人体解剖质量。
+
+## 2026-10-20 补充：区域遮罩也拒绝无表面网格
+
+- 延续体型控制输入审查，发现初始区域遮罩操作器仍允许只有顶点/边、没有多边形面的网格进入流程。现已在创建任何顶点组前拒绝该类输入，并扩展 Blender smoke regression 检查取消结果及顶点组未被创建。
+- 实现提交：`a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8`；测试提交：`bbaa94a7f9d58b825d165f7b3133bf3629a993f0`。
+- 当前仅确认变更已提交到分支；尚无对应 Blender runtime / GitHub Actions 结果。
