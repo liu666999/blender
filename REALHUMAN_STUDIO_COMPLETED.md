@@ -515,3 +515,9 @@
 - 已新增 `tests/realhuman_studio_smoke.py` 回归用例，要求操作取消且不创建 Basis Shape Key。
 - 相关提交：`a7c2a24552606b420804645fe2ccae8058473c3f`、`01483921939f3ca11d5d205b85bbfcde9c87c14f`。
 - **验证边界：尚未运行当前 HEAD 的 Blender smoke/runtime 测试；本项属于已写入代码、待实测的防护，不代表测试通过，也不代表真实人体形态变形已验收。**
+
+## 2026-10-20 补充：区域遮罩输入校验（待运行验证）
+
+- 初始体型区域遮罩操作器现在也会在创建顶点组前拒绝没有多边形面的网格。
+- Smoke regression 检查该操作应取消，且不能残留顶点组。
+- 提交：`a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8`、`bbaa94a7f9d58b825d165f7b3133bf3629a993f0`。此项尚未在 Blender runtime 运行，不等于已测试通过。
