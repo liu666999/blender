@@ -577,3 +577,10 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 检查导入/创建图层操作器时发现两处过期提示：创建分类图层后固定显示“10 个”，而当前分类枚举数量已变化；通过 JSON 对象分类映射导入多分类资源时，成功提示仍只显示默认分类，容易误导用户。
 - 已修改 `RH_OT_create_layers`，按 `CATEGORY_ITEMS` 实际数量生成提示；已修改 `RH_OT_import_asset`，根据本次真实分组显示所有目标分类。
 - 这是源代码修复；当前尚未取得 GitHub Actions 对完整插件目录的编译结果，也未在 Blender 内交互验证。
+
+## 2026-10-20：体型控制输入网格表面校验
+
+- 源码审查发现，体型控制生成器此前会接受只有顶点/边、没有多边形面的网格；这类几何不是可用的人体表面，却可能被添加 Basis 与体型 Shape Keys。
+- 已在 `RH_OT_generate_body_proportion_keys` 创建/更新形态键前增加 `len(obj.data.polygons) == 0` 拒绝条件，并在 `tests/realhuman_studio_smoke.py` 增加无面网格回归用例。
+- 提交：`a7c2a24552606b420804645fe2ccae8058473c3f`（实现）、`01483921939f3ca11d5d205b85bbfcde9c87c14f`（回归用例）。
+- **状态：源码与测试已提交，尚未在 Blender runtime 或当前 HEAD 的 Actions 中执行；不代表测试通过。** 该校验只能排除无表面输入，不能判断真实人体解剖质量。
