@@ -517,3 +517,7 @@
 - [ ] 在 Blender runtime 运行 smoke test，确认无面网格在体型控制生成和区域遮罩生成中都被拒绝，且不留下 Shape Keys 或顶点组。
 - [ ] 取得包含 `a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8` 与 `bbaa94a7f9d58b825d165f7b3133bf3629a993f0` 的 CI 结果；目前未确认运行结果。
 - [ ] 真实人体资产下载、导入和视觉验收仍未完成。
+
+## Validation follow-up (2026-10-20)
+- [ ] Run `tests/realhuman_studio_smoke.py` in the target Blender runtime and confirm the new zero-depth rejection case passes.
+- [ ] Validate proportion controls on an actual licensed human base mesh; local-axis bounding-box checks are only a basic preflight and do not prove anatomical correctness or upright orientation.
