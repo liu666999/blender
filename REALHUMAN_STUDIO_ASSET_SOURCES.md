@@ -159,3 +159,7 @@ GitHub Actions 现在会对 `scripts/addons_core/realhuman_studio` 与 `tests` �
 ## 2026-10-20：人体基础网格输入检查补充
 
 体型控制生成器新增了“必须存在多边形面”的输入防护及对应 Blender smoke regression。此项不是资产来源或质量认证：官方 CC0 Human Base Meshes 仍未在当前环境中下载、导入和实测；请在 `REALHUMAN_STUDIO_TODO.md` 中追踪真实人体验证状态。代码提交 `a7c2a24552606b420804645fe2ccae8058473c3f`，测试提交 `01483921939f3ca11d5d205b85bbfcde9c87c14f`，runtime 状态待验证。
+
+## 2026-10-20 补充：人体区域遮罩输入防护
+
+体型区域遮罩生成器现在会拒绝没有多边形面的网格，避免对非表面几何创建伪人体区域顶点组。实现提交 `a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8`，回归用例提交 `bbaa94a7f9d58b825d165f7b3133bf3629a993f0`。这只是输入防护；真实 Human Base Meshes 仍未在当前环境中下载、导入或实测，runtime 状态待验证。
