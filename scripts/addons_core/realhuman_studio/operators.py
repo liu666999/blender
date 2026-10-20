@@ -2606,6 +2606,10 @@ class RH_OT_create_body_proportion_masks(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.active_object
+        if len(obj.data.polygons) == 0:
+            self.report({"ERROR"}, "当前网格没有多边形表面，无法生成体型区域遮罩。")
+            return {"CANCELLED"}
+
         shape_keys = obj.data.shape_keys
         basis = shape_keys.key_blocks[0] if shape_keys else None
         base_coords = (
