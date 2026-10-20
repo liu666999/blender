@@ -175,3 +175,8 @@ The proportion generator now requires non-zero finite extents on local X/Y/Z. Th
 - 官方资源页列出的 Human Base Meshes v1.4.1 为约 49 MB、CC0、要求 Blender 4.2 或更新版本。官方入口：https://www.blender.org/download/demo-files/；直接下载：https://mirror.blender.org/demo/asset-bundles/human-base-meshes/human-base-meshes-bundle-v1.4.1.zip
 - 类别建议只根据名称匹配，必须人工核对网格和具体许可；批量盘点工具没有下载资产，也没有验证实际解剖质量。
 - 代码提交：`6a02a6f961f64efcdccdd5acda340aed0449b908`。尚未在 Blender runtime 中运行。
+
+
+## 2026-10-20：资产包盘点报告离线校验
+
+新增离线校验器 `tests/validate_realhuman_studio_bundle_inventory.py` 及单元测试 `tests/test_validate_realhuman_studio_bundle_inventory.py`。报告生成后，可用普通 Python 执行 `python tests/validate_realhuman_studio_bundle_inventory.py path/to/realhuman_studio_bundle_inventory.json`。校验器检查文件计数、资产/失败记录、数据块列表、对象分类建议完整性和人工复核标记。它不验证实际几何、解剖结构、源文件真实性或许可。新增代码提交：`ec6106b52e1689b0fccca2ddd149f9064fee5105`、`1d6ab308e1126c40c4e2c73423fa68484e8639e3`；测试执行与真实资产包清单仍待验证。
