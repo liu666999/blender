@@ -231,6 +231,26 @@ def run():
            "Rejected geometry must not be mutated by creating a stray Basis shape key.")
     bpy.data.objects.remove(flat_mesh, do_unlink=True)
 
+    # A vertex/edge-only mesh must not be accepted as a body surface.
+    surface_less_data = bpy.data.meshes.new("RH CI Surface-less Mesh")
+    surface_less_data.from_pydata(
+        [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0),
+         (1.0, 0.0, 1.0), (0.0, 0.0, 1.0)],
+        [(0, 1), (1, 2), (2, 3), (3, 0)], [],
+    )
+    surface_less_data.update()
+    surface_less_mesh = bpy.data.objects.new("RH CI Surface-less Mesh", surface_less_data)
+    bpy.context.scene.collection.objects.link(surface_less_mesh)
+    activate(surface_less_mesh)
+    result = bpy.ops.rh_studio.generate_body_proportion_keys()
+    ensure("CANCELLED" in result,
+           "A mesh without polygon faces must be rejected by body-proportion generation.")
+    ensure(surface_less_mesh.data.shape_keys is None,
+           "Surface-less geometry rejection must not create a partial Basis shape key.")
+    bpy.data.objects.remove(surface_less_mesh, do_unlink=True)
+    if surface_less_data.users == 0:
+        bpy.data.meshes.remove(surface_less_data)
+
     # Build and update non-destructive body-proportion shape keys on an upright mesh.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(4.0, 0.0, 1.0))
     proportion_mesh = bpy.context.object
