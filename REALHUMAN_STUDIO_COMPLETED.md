@@ -521,3 +521,7 @@
 - 初始体型区域遮罩操作器现在也会在创建顶点组前拒绝没有多边形面的网格。
 - Smoke regression 检查该操作应取消，且不能残留顶点组。
 - 提交：`a67fa3fc22dc043dcedc9d33c60c9ecd46a7d6b8`、`bbaa94a7f9d58b825d165f7b3133bf3629a993f0`。此项尚未在 Blender runtime 运行，不等于已测试通过。
+
+## Geometry guard added (2026-10-20)
+- Body-proportion generation now rejects meshes whose local X, Y, or Z extent is non-finite or effectively zero, before creating a Basis or modifying shape keys.
+- Added a smoke-test regression case asserting that a zero-depth mesh is cancelled without creating shape keys. This is implemented in source; runtime validation remains pending.
