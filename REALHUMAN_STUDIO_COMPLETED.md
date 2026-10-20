@@ -538,3 +538,8 @@
 - 新增 `tests/validate_realhuman_studio_bundle_inventory.py`，检查 bundle inventory JSON 的基本结构、计数一致性、重复资产/失败路径、对象名清单与分类建议覆盖关系，并强制保留人工复核标记。
 - 新增 `tests/test_validate_realhuman_studio_bundle_inventory.py`，覆盖正常报告、计数不一致、重复路径、建议缺失、非法分类、复核标记缺失和资产/失败路径冲突等案例。
 - 代码已推送到 `feature/realhuman-studio-phase1`；当前只确认 GitHub 文件提交成功，不把它描述为测试已通过。实际测试执行与 GitHub Actions 结果待确认。
+
+
+## 2026-10-20 补充：CI 已纳入 bundle validator
+
+检查发现旧工作流未监听新建的 bundle inventory 验证器文件，且 unittest 只执行旧测试模块。已修复 push/PR 路径过滤器和测试命令，使 bundle validator 的测试可进入 CI。工作流提交：`e3cab54831a8b4987689bba7f053879b06cbbd17`、`4d41acf64af4e93eac92dcb8b71afad9f81dd93e`。Actions 执行结果仍待确认。
