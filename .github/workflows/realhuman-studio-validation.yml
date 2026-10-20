@@ -7,6 +7,8 @@ on:
     paths:
       - 'tests/validate_realhuman_studio_asset_inventory.py'
       - 'tests/test_validate_realhuman_studio_asset_inventory.py'
+      - 'tests/validate_realhuman_studio_bundle_inventory.py'
+      - 'tests/test_validate_realhuman_studio_bundle_inventory.py'
       - 'scripts/addons_core/realhuman_studio/**/*.py'
       - 'scripts/addons_core/realhuman_studio/*.py'
       - '.github/workflows/realhuman-studio-validation.yml'
@@ -33,4 +35,4 @@ jobs:
         run: python -m compileall -q scripts/addons_core/realhuman_studio tests
       - name: Run validator unit tests
         working-directory: tests
-        run: python -m unittest -v test_validate_realhuman_studio_asset_inventory.py
+        run: python -m unittest -v test_validate_realhuman_studio_asset_inventory.py test_validate_realhuman_studio_bundle_inventory.py
