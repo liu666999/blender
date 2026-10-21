@@ -615,3 +615,10 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 ## 2026-10-20：离线校验 CI 覆盖范围修正
 
 检查工作流后发现，原有 GitHub Actions 的 `paths` 过滤器和 unittest 命令只覆盖旧的单文件资产清单验证器，因此新建的 bundle validator 即使提交也不会自动参与常规 push 检查。现已将新验证器及其测试加入 push/PR 路径过滤器，并将两个测试模块都加入 unittest 命令。工作流修正提交：`e3cab54831a8b4987689bba7f053879b06cbbd17`、`4d41acf64af4e93eac92dcb8b71afad9f81dd93e`。目前尚无可确认的 Actions 运行结果，不能标记为 CI 通过。
+
+## 2026-10-21 补充：离线资产清单验证器接入 CI
+
+- 更新 `.github/workflows/realhuman-studio-static.yml`：资产清单与人体 bundle 清单脚本、两个离线验证器和对应单元测试文件都纳入 push / pull_request 路径过滤。
+- 在 Python 语法检查 job 后增加离线验证器单元测试步骤，执行 `test_validate_realhuman_studio_asset_inventory` 与 `test_validate_realhuman_studio_bundle_inventory`。
+- 工作流修复提交：`90fac40cbe2467f67d77107d807ff21ae03ecd1e`。
+- **状态：工作流已更新；尚未取得该提交对应的新 Actions 运行结果，因此测试结果仍待验证。**
