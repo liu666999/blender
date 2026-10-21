@@ -622,3 +622,14 @@ RealHuman Studio 的长期目标是一个以高质量人体创作流程为中心
 - 在 Python 语法检查 job 后增加离线验证器单元测试步骤，执行 `test_validate_realhuman_studio_asset_inventory` 与 `test_validate_realhuman_studio_bundle_inventory`。
 - 工作流修复提交：`90fac40cbe2467f67d77107d807ff21ae03ecd1e`。
 - **状态：工作流已更新；尚未取得该提交对应的新 Actions 运行结果，因此测试结果仍待验证。**
+
+## 2026-10-21 补充：人体模板角色级应用
+
+本轮增加可操作的角色级模板导入，不只是 UI 概念：
+
+- 导入器支持 ACTIVE 和 CHARACTER 两种范围。角色范围使用既有分类图层对象集合，匹配同名 RH 标准形态键后再写入。
+- 采用先校验、后执行的两阶段流程：检查 schema、数值类型和有限性；计划阶段统计目标与缺失参数；没有任何匹配时取消且不改模型。
+- 对共享 Mesh/Shape Keys 数据块去重；尊重每个目标键自身的滑块上下限；非标准自定义键保持不变。
+- UI 增加独立的角色级模板载入按钮；后台 smoke test 覆盖角色图层参数应用和自定义键保护。
+- 代码提交：5272dc96f4785771214081860eb4587d1dc47694、c2572269c4863a832e9cf350ba39d2398b5cdf3d、9b9d9eabdbff2b08c03281e67d1fe7edf71fff64。
+- 当前环境未能访问 GitHub Actions 的新运行记录；本轮尚未取得完整插件的 compileall 或 Blender runtime 结果。需要继续排查工作流触发/权限，不能把测试脚本已提交当作测试通过。
