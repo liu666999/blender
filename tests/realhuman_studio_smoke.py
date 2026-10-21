@@ -375,6 +375,35 @@ def run():
         for key_name, expected in expected_template_values.items():
             ensure(abs(template_keys[key_name].value - expected) < 1e-6,
                    "Body template did not restore %s." % key_name)
+        # Character-wide template import should update only matching RH keys
+        # on classified meshes and preserve unrelated artist-authored keys.
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(8.0, 0.0, 1.0))
+        template_target = bpy.context.object
+        template_target.name = "RH CI Template Target"
+        template_target.shape_key_add(name="Basis", from_mix=False)
+        for key_name in expected_template_values:
+            template_target.shape_key_add(name=key_name, from_mix=False)
+        template_custom = template_target.shape_key_add(name="User Custom", from_mix=False)
+        template_custom.value = 0.42
+        template_collection = rh_operators.category_collection(
+            bpy.context.scene, "BASE_BODY", create=True)
+        ensure(template_collection is not None,
+               "Could not create base-body category for character-wide template test.")
+        rh_operators.move_objects_to_category(
+            [template_target], bpy.context.scene, "BASE_BODY")
+        for key_name in expected_template_values:
+            template_target.data.shape_keys.key_blocks[key_name].value = 0.0
+        activate(proportion_mesh)
+        result = bpy.ops.rh_studio.import_body_template(
+            filepath=template_path, scope="CHARACTER")
+        ensure("FINISHED" in result,
+               "Character-wide body template import failed.")
+        for key_name, expected in expected_template_values.items():
+            ensure(abs(template_target.data.shape_keys.key_blocks[key_name].value - expected) < 1e-6,
+                   "Character-wide body template did not restore %s." % key_name)
+        ensure(abs(template_custom.value - 0.42) < 1e-6,
+               "Character-wide body template modified an unrelated custom key.")
+
         invalid_path = os.path.join(template_dir, "invalid.json")
         with open(invalid_path, "w", encoding="utf-8") as handle:
             json.dump({"schema": "wrong_schema", "shape_key_values": {"RH体型 | 肩宽": 1.0}}, handle)
