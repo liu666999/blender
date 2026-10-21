@@ -540,5 +540,5 @@
 
 ## 2026-10-20 补充：CI 工作流修正
 
-- [ ] 检查提交 `4d41acf64af4e93eac92dcb8b71afad9f81dd93e` 对应 GitHub Actions 运行结果，确认 `compileall` 与两个验证器单元测试都实际执行并通过。
-- [ ] 如果 push 工作流未触发，检查仓库 Actions 权限/运行记录；不要把空的 status 列表当作通过。
+- [x] 已修正工作流路径过滤，将两个资产清单脚本、两个离线验证器及对应单元测试纳入 push / pull_request 触发范围；并在 Python 语法检查后加入两个验证器的 unittest 步骤（提交 `90fac40cbe2467f67d77107d807ff21ae03ecd1e`）。
+- [ ] 检查修复提交对应的 GitHub Actions 运行结果，确认 `compileall` 与两个验证器单元测试实际执行并通过；若没有新运行，继续排查 Actions 触发/权限。
