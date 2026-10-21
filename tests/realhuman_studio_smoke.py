@@ -413,6 +413,20 @@ def run():
                and abs(proportion_keys["RH体型 | 肩宽"].value - before_invalid_load) < 1e-6,
                "Invalid body template must be rejected without changing the mesh.")
 
+        # Non-finite numeric parameters must be rejected before any key changes.
+        for invalid_value in (float("nan"), float("inf"), float("-inf")):
+            nonfinite_path = os.path.join(template_dir, "nonfinite.json")
+            with open(nonfinite_path, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "schema": "realhuman_studio_body_template_v1",
+                    "shape_key_values": {"RH脸型 | 眼距": invalid_value},
+                }, handle, allow_nan=True)
+            protected_value = float(template_keys["RH脸型 | 眼距"].value)
+            result = bpy.ops.rh_studio.import_body_template(filepath=nonfinite_path)
+            ensure("CANCELLED" in result
+                   and abs(template_keys["RH脸型 | 眼距"].value - protected_value) < 1e-6,
+                   "Non-finite body-template values must be rejected without mutation.")
+
     # Character-wide presets should update only matching keys on classified
     # meshes, while leaving unrelated user-authored keys untouched.
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=(6.0, 0.0, 1.0))
