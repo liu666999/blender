@@ -542,3 +542,12 @@
 
 - [x] 已修正工作流路径过滤，将两个资产清单脚本、两个离线验证器及对应单元测试纳入 push / pull_request 触发范围；并在 Python 语法检查后加入两个验证器的 unittest 步骤（提交 `90fac40cbe2467f67d77107d807ff21ae03ecd1e`）。
 - [ ] 检查修复提交对应的 GitHub Actions 运行结果，确认 `compileall` 与两个验证器单元测试实际执行并通过；若没有新运行，继续排查 Actions 触发/权限。
+
+## 2026-10-21 新增：角色级人体模板导入与编译验证
+- [x] 人体模板导入新增当前网格 / 角色全部图层两种范围；角色范围只应用匹配的 RH 标准形态键。
+- [x] 增加模板数值预校验、共享 Mesh 数据块去重、目标滑块范围约束，以及不修改用户自定义键的回归测试。
+- [x] 更新侧栏入口和 Blender smoke test，覆盖角色级模板应用。
+- [x] 对本轮修改的操作器代码块与测试插入代码块进行 Python AST 语法解析，两者均通过。
+- [ ] 对完整插件目录和 tests 目录运行 `python -m compileall`，并在对应 Blender runtime 执行 smoke test。当前无法从此运行环境克隆 GitHub 仓库（DNS/网络访问失败），GitHub Actions API 也未返回本轮提交的新运行，因此完整编译和 Blender runtime 仍未确认。
+- [ ] 取得可用的最新 CI 运行结果；若仍未触发，使用有 Actions 写权限的方式手动 dispatch 工作流后再记录结论。
+- [ ] 真实人体资产下载、许可证复核、解剖层对齐和 GUI 视觉验收仍未完成。
