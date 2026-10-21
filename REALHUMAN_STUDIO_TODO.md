@@ -551,3 +551,10 @@
 - [ ] 对完整插件目录和 tests 目录运行 `python -m compileall`，并在对应 Blender runtime 执行 smoke test。当前无法从此运行环境克隆 GitHub 仓库（DNS/网络访问失败），GitHub Actions API 也未返回本轮提交的新运行，因此完整编译和 Blender runtime 仍未确认。
 - [ ] 取得可用的最新 CI 运行结果；若仍未触发，使用有 Actions 写权限的方式手动 dispatch 工作流后再记录结论。
 - [ ] 真实人体资产下载、许可证复核、解剖层对齐和 GUI 视觉验收仍未完成。
+
+
+## 2026-10-21 补充：人体模板非有限数值回归保护
+- [x] 新增 Blender smoke 回归用例：模板中的 NaN、正无穷和负无穷必须在任何形态键修改前被拒绝。
+- [ ] 在目标 Blender runtime 执行 smoke suite，确认 Blender JSON 读取与操作器取消行为均符合预期。
+- [ ] 完整插件 compileall、CI 当前 HEAD 与真实人体网格视觉验收仍待实际运行/检查；本测试源码已提交，但不能据此声称运行通过。
+- 测试提交：7a97ac18070d8f0822bf3d29476e347bcda66120。
