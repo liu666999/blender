@@ -131,7 +131,12 @@ class RH_PT_main(bpy.types.Panel):
         body.operator("rh_studio.sync_character_shape_key_values", icon="DRIVER", text="同步标准形态参数到角色各层")
         template_row = body.row(align=True)
         template_row.operator("rh_studio.export_body_template", icon="EXPORT", text="保存人体模板 JSON")
-        template_row.operator("rh_studio.import_body_template", icon="IMPORT", text="载入人体模板 JSON")
+        template_row.operator("rh_studio.import_body_template", icon="IMPORT", text="载入当前网格")
+        template_row = body.row(align=True)
+        template_op = template_row.operator(
+            "rh_studio.import_body_template", icon="IMPORT",
+            text="载入并应用到角色各层")
+        template_op.scope = "CHARACTER"
         body.label(text="标准参数名使用 RH体型 |、RH脸型 |、RH肌肉 |、RH脂肪 |、RH毛发 | 前缀；只同步目标中同名且存在的键。")
         body.label(text="肌肉/脂肪、五官、毛发与分层解剖仍需对应真实资产和独立控制。")
         body.label(text="适用于单个人体网格（局部 Z 轴向上）。初始遮罩按高度粗分区；已有同名权重组不会覆盖，请用权重绘制精修。")
