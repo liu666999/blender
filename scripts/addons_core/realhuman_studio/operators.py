@@ -2837,11 +2837,19 @@ class RH_OT_export_body_template(bpy.types.Operator, ExportHelper):
 class RH_OT_import_body_template(bpy.types.Operator, ImportHelper):
     bl_idname = "rh_studio.import_body_template"
     bl_label = "载入人体模板"
-    bl_description = "Apply matching shape-key values from a saved RealHuman Studio JSON template"
+    bl_description = "Apply matching shape-key values to the active mesh or classified character layers"
     bl_options = {"REGISTER", "UNDO"}
 
     filename_ext = ".json"
     filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
+    scope: EnumProperty(
+        name="应用范围",
+        items=(
+            ("ACTIVE", "当前网格", "只载入到活动人体网格"),
+            ("CHARACTER", "角色全部图层", "将模板中同名参数应用到已分类角色网格"),
+        ),
+        default="ACTIVE",
+    )
 
     @classmethod
     def poll(cls, context):
@@ -2849,7 +2857,7 @@ class RH_OT_import_body_template(bpy.types.Operator, ImportHelper):
         return bool(obj and obj.type == "MESH" and obj.data.shape_keys)
 
     def execute(self, context):
-        obj = context.active_object
+        active = context.active_object
         path = Path(bpy.path.abspath(self.filepath))
         try:
             template = json.loads(path.read_text(encoding="utf-8"))
@@ -2863,14 +2871,13 @@ class RH_OT_import_body_template(bpy.types.Operator, ImportHelper):
         if not isinstance(values, dict) or not values:
             self.report({"ERROR"}, "人体模板没有有效的形态参数；未修改模型。")
             return {"CANCELLED"}
-        keys = obj.data.shape_keys.key_blocks
-        applicable = []
+
+        supported_prefixes = (
+            "RH体型 | ", "RH脸型 | ", "RH肌肉 | ", "RH脂肪 | ", "RH毛发 | ",
+        )
+        parsed_values = {}
         for name, value in values.items():
-            if not isinstance(name, str) or not name.startswith(
-                    ("RH体型 | ", "RH脸型 | ", "RH肌肉 | ", "RH脂肪 | ", "RH毛发 | ")):
-                continue
-            key = keys.get(name)
-            if key is None:
+            if not isinstance(name, str) or not name.startswith(supported_prefixes):
                 continue
             try:
                 numeric = float(value)
@@ -2880,14 +2887,62 @@ class RH_OT_import_body_template(bpy.types.Operator, ImportHelper):
             if not math.isfinite(numeric):
                 self.report({"ERROR"}, "模板参数 %s 不是有限数值；未修改模型。" % name)
                 return {"CANCELLED"}
-            applicable.append((key, numeric))
-        if not applicable:
-            self.report({"ERROR"}, "当前网格没有与模板匹配的标准形态键；未修改模型。")
+            parsed_values[name] = numeric
+        if not parsed_values:
+            self.report({"ERROR"}, "人体模板没有可识别的 RH 标准形态参数；未修改模型。")
             return {"CANCELLED"}
-        for key, numeric in applicable:
-            key.value = max(float(key.slider_min), min(float(key.slider_max), numeric))
+
+        if self.scope == "CHARACTER":
+            targets = [
+                item for item in _character_layer_objects(context.scene)
+                if item.type == "MESH" and item.data.shape_keys is not None
+            ]
+            if active not in targets:
+                targets.append(active)
+        else:
+            targets = [active]
+
+        # De-duplicate shared Mesh/Key datablocks so linked objects do not receive
+        # the same assignment repeatedly, and build a complete plan before writes.
+        seen_data = set()
+        plan = []
+        missing_count = 0
+        for target in targets:
+            if not target or target.type != "MESH" or not target.data.shape_keys:
+                continue
+            pointer = target.data.shape_keys.as_pointer()
+            if pointer in seen_data:
+                continue
+            seen_data.add(pointer)
+            keys = target.data.shape_keys.key_blocks
+            target_plan = []
+            for name, numeric in parsed_values.items():
+                key = keys.get(name)
+                if key is None:
+                    missing_count += 1
+                    continue
+                target_plan.append((
+                    key,
+                    max(float(key.slider_min), min(float(key.slider_max), numeric)),
+                ))
+            if target_plan:
+                plan.append((target, target_plan))
+
+        applied_keys = sum(len(target_plan) for _target, target_plan in plan)
+        if not applied_keys:
+            self.report({"ERROR"}, "应用范围内没有匹配的标准形态键；未修改模型。")
+            return {"CANCELLED"}
+
+        for _target, target_plan in plan:
+            for key, numeric in target_plan:
+                key.value = numeric
         context.view_layer.update()
-        self.report({"INFO"}, "已载入人体模板：更新 %d 个匹配形态参数，未匹配参数已跳过。" % len(applicable))
+        scope_label = "角色图层" if self.scope == "CHARACTER" else "当前网格"
+        message = "已载入人体模板（%s）：更新 %d 个网格数据块、%d 个匹配参数。" % (
+            scope_label, len(plan), applied_keys)
+        if missing_count:
+            message += " 未匹配参数跳过 %d 项。" % missing_count
+        self.report({"WARNING"} if missing_count else {"INFO"}, message)
         return {"FINISHED"}
 
 
